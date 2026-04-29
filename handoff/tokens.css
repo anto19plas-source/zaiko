@@ -1,0 +1,85 @@
+/* Zaiko — Design tokens
+ * Importer dans le :root global de l'application.
+ */
+
+:root {
+  /* === Palette === */
+  --zk-ink:        #0B1220;
+  --zk-navy:       #0F2A4A;
+  --zk-navy-deep:  #081A2F;
+  --zk-navy-soft:  #1B3558;
+
+  --zk-gold:       #C9A24B;
+  --zk-gold-light: #E3C275;
+  --zk-gold-deep:  #A8862F;
+
+  --zk-red:        #B23A2A;
+  --zk-red-deep:   #8C2A1E;
+
+  --zk-bone:       #F4EFE6;
+  --zk-paper:      #FAF7F1;
+  --zk-rule:       #E2D9C7;
+
+  --zk-muted:      #54688A;  /* texte secondaire light */
+  --zk-muted-dark: #9FB2CF;  /* texte secondaire dark  */
+
+  /* États sémantiques */
+  --zk-success:    #2A6F4F;
+  --zk-warning:    var(--zk-gold);
+  --zk-danger:     var(--zk-red);
+
+  /* === Typographie === */
+  --zk-font-sans:  'Inter', system-ui, -apple-system, sans-serif;
+  --zk-font-serif: 'Fraunces', Georgia, serif;
+  --zk-font-mono:  'JetBrains Mono', ui-monospace, monospace;
+
+  /* Tailles type — base 16 */
+  --zk-text-xs:   11px;
+  --zk-text-sm:   13px;
+  --zk-text-base: 16px;
+  --zk-text-lg:   18px;
+  --zk-text-xl:   24px;
+  --zk-text-2xl:  32px;
+  --zk-text-3xl:  40px;
+  --zk-text-4xl:  56px;
+  --zk-text-5xl:  72px;
+
+  /* Letter-spacing wordmark */
+  --zk-tracking-tight: -0.04em;
+  --zk-tracking-mono:  0.28em;
+
+  /* === Layout === */
+  --zk-radius-sm:  4px;
+  --zk-radius-md:  6px;
+  --zk-radius-lg:  10px;
+  --zk-radius-xl:  16px;
+  --zk-radius-app: 23%;  /* app icon */
+
+  --zk-space-1: 4px;
+  --zk-space-2: 8px;
+  --zk-space-3: 12px;
+  --zk-space-4: 16px;
+  --zk-space-5: 24px;
+  --zk-space-6: 32px;
+  --zk-space-7: 44px;
+  --zk-space-8: 64px;
+
+  /* === Ombres === */
+  --zk-shadow-sm: 0 2px 6px -2px rgba(8, 26, 47, 0.08);
+  --zk-shadow-md: 0 8px 24px -8px rgba(8, 26, 47, 0.18);
+  --zk-shadow-lg: 0 24px 48px -16px rgba(8, 26, 47, 0.45);
+}
+
+/* Base — applique le fond paper + texte ink par défaut */
+html, body {
+  background: var(--zk-paper);
+  color: var(--zk-ink);
+  font-family: var(--zk-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Mode sombre via attribut [data-theme="dark"] */
+[data-theme="dark"] {
+  background: var(--zk-navy-deep);
+  color: var(--zk-bone);
+}

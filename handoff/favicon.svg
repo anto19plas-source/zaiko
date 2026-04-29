@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Zaiko">
+  <rect width="64" height="64" rx="14" fill="#0F2A4A"></rect>
+  <g transform="translate(8 12)">
+    <rect x="0" y="0" width="48" height="8" rx="1.5" fill="#C9A24B"></rect>
+    <rect x="22" y="12" width="14" height="6" rx="1.5" fill="#C9A24B" opacity="0.85"></rect>
+    <rect x="14" y="22" width="14" height="6" rx="1.5" fill="#C9A24B" opacity="0.7"></rect>
+    <rect x="6" y="32" width="14" height="6" rx="1.5" fill="#B23A2A"></rect>
+    <rect x="0" y="42" width="48" height="8" rx="1.5" fill="#C9A24B"></rect>
+  </g>
+</svg>

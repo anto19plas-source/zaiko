@@ -5,10 +5,10 @@ import random
 DB_PATH = "zaiko.db"
 
 RESTAURANTS_CONFIG = [
-    {"id": 1, "nom": "Chéri Chéri",         "type": "Bar à cocktails",     "emoji": "🌸", "accent": "#F4A5A0", "key": "cheri_cheri"},
-    {"id": 2, "nom": "Chéri Guapito",        "type": "Restaurant mexicain", "emoji": "🌶️", "accent": "#E05C4B", "key": "guapito"},
-    {"id": 3, "nom": "Chéri Guapo",          "type": "Restaurant argentin", "emoji": "🥩", "accent": "#8B2635", "key": "guapo"},
-    {"id": 4, "nom": "Les Halles de la Cité","type": "Brasserie",           "emoji": "🌻", "accent": "#D4A20A", "key": "halles"},
+    {"id": 1, "nom": "Chéri Chéri",         "type": "Bar à cocktails",     "accent": "#D89593", "key": "cheri_cheri"},
+    {"id": 2, "nom": "Chéri Guapito",        "type": "Restaurant mexicain", "accent": "#B23A2A", "key": "guapito"},
+    {"id": 3, "nom": "Chéri Guapo",          "type": "Restaurant argentin", "accent": "#7A2A22", "key": "guapo"},
+    {"id": 4, "nom": "Les Halles de la Cité","type": "Brasserie",           "accent": "#C9A24B", "key": "halles"},
 ]
 
 
@@ -26,7 +26,6 @@ def init_db():
             id              INTEGER PRIMARY KEY,
             nom             TEXT NOT NULL,
             type            TEXT,
-            emoji           TEXT,
             couleur_accent  TEXT,
             adresse         TEXT
         );
@@ -84,20 +83,20 @@ def init_db():
 
 
 def _seed(c):
-    c.executemany("INSERT INTO restaurants VALUES (?,?,?,?,?,?)", [
-        (1, "Chéri Chéri",          "Bar à cocktails",     "🌸", "#F4A5A0", "Paris 11e"),
-        (2, "Chéri Guapito",         "Restaurant mexicain", "🌶️", "#E05C4B", "Paris 2e"),
-        (3, "Chéri Guapo",           "Restaurant argentin", "🥩", "#8B2635", "Paris 9e"),
-        (4, "Les Halles de la Cité", "Brasserie",           "🌻", "#D4A20A", "Paris 1er"),
+    c.executemany("INSERT INTO restaurants VALUES (?,?,?,?,?)", [
+        (1, "Chéri Chéri",          "Bar à cocktails",     "#D89593", "Paris 11e"),
+        (2, "Chéri Guapito",         "Restaurant mexicain", "#B23A2A", "Paris 2e"),
+        (3, "Chéri Guapo",           "Restaurant argentin", "#7A2A22", "Paris 9e"),
+        (4, "Les Halles de la Cité", "Brasserie",           "#C9A24B", "Paris 1er"),
     ])
 
     c.executemany("INSERT INTO categories VALUES (?,?,?)", [
-        (1, "Alcools",          "🍷"),
-        (2, "Soft & Jus",       "🧃"),
-        (3, "Viandes",          "🥩"),
-        (4, "Légumes",          "🥬"),
-        (5, "Produits laitiers","🧀"),
-        (6, "Épicerie",         "🫙"),
+        (1, "Alcools",          ""),
+        (2, "Soft & Jus",       ""),
+        (3, "Viandes",          ""),
+        (4, "Légumes",          ""),
+        (5, "Produits laitiers",""),
+        (6, "Épicerie",         ""),
     ])
 
     c.executemany("INSERT INTO produits VALUES (?,?,?,?,?,?,1)", [

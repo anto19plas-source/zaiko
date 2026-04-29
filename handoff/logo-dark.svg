@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 132" role="img" aria-label="Zaiko">
+  <g>
+    <rect x="10" y="14" width="100" height="18" rx="2" fill="#0F2A4A"></rect>
+    <rect x="14" y="14" width="92" height="4" fill="#C9A24B" opacity="0.9"></rect>
+    <rect x="62" y="40" width="34" height="14" rx="2" fill="#0F2A4A" opacity="0.85"></rect>
+    <rect x="46" y="60" width="34" height="14" rx="2" fill="#0F2A4A" opacity="0.7"></rect>
+    <rect x="30" y="80" width="34" height="14" rx="2" fill="#B23A2A" opacity="0.95"></rect>
+    <rect x="10" y="100" width="100" height="18" rx="2" fill="#0F2A4A"></rect>
+    <rect x="14" y="114" width="92" height="4" fill="#C9A24B" opacity="0.9"></rect>
+  </g>
+  <text x="146" y="92" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="84" letter-spacing="-3.4" fill="#F4EFE6">Zaiko</text>
+</svg>
