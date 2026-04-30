@@ -100,21 +100,21 @@ def _seed(c):
     ])
 
     c.executemany("INSERT INTO produits VALUES (?,?,?,?,?,?,1)", [
-        (1,  "Gin Hendricks",          1, "bouteille", 28.50,  3),
-        (2,  "Vodka Grey Goose",       1, "bouteille", 32.00,  3),
-        (3,  "Rum Bacardi",            1, "bouteille", 18.50,  5),
-        (4,  "Whisky Monkey Shoulder", 1, "bouteille", 24.00,  3),
-        (5,  "Champagne Billecart",    1, "bouteille", 45.00,  6),
-        (6,  "Jus d'orange frais",     2, "litre",      4.50, 10),
-        (7,  "Sirop de sucre",         2, "litre",      3.00,  5),
-        (8,  "Coca-Cola 33cl",         2, "bouteille",  1.50, 24),
-        (9,  "Bœuf haché",             3, "kg",        12.00,  5),
-        (10, "Poulet fermier",         3, "kg",         8.50,  8),
-        (11, "Tomates cerises",        4, "kg",         4.00,  5),
-        (12, "Avocat",                 4, "pièce",      1.20, 20),
-        (13, "Comté 18 mois",          5, "kg",        22.00,  2),
-        (14, "Crème fraîche",          5, "litre",      3.50,  5),
-        (15, "Sel de mer",             6, "kg",         2.00,  2),
+        (1,  "Gin Hendricks",          1, "70cl",  28.50,  3),
+        (2,  "Vodka Grey Goose",       1, "70cl",  32.00,  3),
+        (3,  "Rum Bacardi",            1, "70cl",  18.50,  5),
+        (4,  "Whisky Monkey Shoulder", 1, "70cl",  24.00,  3),
+        (5,  "Champagne Billecart",    1, "75cl",  45.00,  6),
+        (6,  "Jus d'orange frais",     2, "1L",     4.50, 10),
+        (7,  "Sirop de sucre",         2, "1L",     3.00,  5),
+        (8,  "Coca-Cola",              2, "33cl",   1.50, 24),
+        (9,  "Bœuf haché",             3, "1kg",   12.00,  5),
+        (10, "Poulet fermier",         3, "1kg",    8.50,  8),
+        (11, "Tomates cerises",        4, "500g",   4.00,  5),
+        (12, "Avocat",                 4, "pièce",  1.20, 20),
+        (13, "Comté 18 mois",          5, "500g",  22.00,  2),
+        (14, "Crème fraîche",          5, "500g",   3.50,  5),
+        (15, "Sel de mer",             6, "1kg",    2.00,  2),
     ])
 
     random.seed(42)
