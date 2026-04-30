@@ -54,6 +54,13 @@ TYPE_MV_COLORS = {
     "transfert": GOLD,
 }
 
+FORMATS_PREDEFINIS = [
+    "20cl", "25cl", "33cl", "37.5cl", "50cl", "70cl", "75cl",
+    "1L", "1.5L", "2L", "5L",
+    "100g", "250g", "500g", "750g", "1kg", "2kg", "5kg", "10kg",
+    "pièce", "lot", "carton",
+]
+
 # ─── Logo SVG (inline, adapté au fond navy) ─────────────────────────────────
 
 LOGO_NAV_SVG = """
@@ -540,6 +547,82 @@ def inject_css():
 
     /* Plotly */
     .js-plotly-plot { font-family: var(--zk-font-sans) !important; }
+
+    /* ═══════════════════════════════════════
+       CATALOGUE — blocs par catégorie
+    ═══════════════════════════════════════ */
+    .zk-cat-block {
+        background: var(--zk-navy);
+        border: 1px solid var(--zk-navy-soft);
+        border-radius: 12px;
+        padding: 22px 28px 14px 28px;
+        margin-bottom: 16px;
+    }
+    .zk-cat-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid var(--zk-navy-soft);
+    }
+    .zk-cat-title {
+        font-family: var(--zk-font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--zk-gold);
+    }
+    .zk-cat-count {
+        font-family: var(--zk-font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--zk-muted-dark);
+    }
+    .zk-prod-line {
+        display: grid;
+        grid-template-columns: 1fr 110px 110px;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 4px;
+        border-bottom: 1px solid rgba(226,217,199,0.08);
+        transition: background 0.15s ease;
+    }
+    .zk-prod-line:last-child { border-bottom: none; }
+    .zk-prod-line:hover { background: var(--zk-navy-soft); }
+    .zk-prod-name {
+        font-family: var(--zk-font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--zk-bone);
+    }
+    .zk-prod-format {
+        font-family: var(--zk-font-mono);
+        font-size: 12px;
+        color: var(--zk-muted-dark);
+        text-align: left;
+    }
+    .zk-prod-price {
+        font-family: var(--zk-font-mono);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--zk-gold);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .zk-cat-empty {
+        background: white;
+        border: 1px solid var(--zk-rule);
+        border-radius: 12px;
+        padding: 40px 24px;
+        text-align: center;
+        font-family: var(--zk-font-sans);
+        font-size: 13px;
+        color: var(--zk-muted);
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -729,39 +812,62 @@ def render_groupe_catalogue():
                 "Référentiel commun à tous les établissements")
 
     cats = db.get_categories()
-    cat_options = {"Toutes catégories": None} | {c["nom"]: c["id"] for c in cats}
+    produits = db.get_produits()
 
-    selected = st.selectbox("Filtre catégorie", list(cat_options.keys()),
-                             label_visibility="collapsed")
-    produits = db.get_produits(cat_options[selected])
+    produits_par_cat = {}
+    for p in produits:
+        key = p["categorie_nom"] or "Sans catégorie"
+        produits_par_cat.setdefault(key, []).append(p)
 
     if produits:
-        df = pd.DataFrame([{
-            "Produit":        p["nom"],
-            "Catégorie":      p["categorie_nom"] or "—",
-            "Unité":          p["unite"],
-            "Prix (€)":       p["prix_unitaire"],
-            "Seuil alerte":   p["seuil_alerte"],
-        } for p in produits])
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        for cat_nom in sorted(produits_par_cat.keys()):
+            items = produits_par_cat[cat_nom]
+            lignes_html = "".join(
+                f'''<div class="zk-prod-line">
+                    <div class="zk-prod-name">{p["nom"]}</div>
+                    <div class="zk-prod-format">{p["unite"]}</div>
+                    <div class="zk-prod-price">{p["prix_unitaire"]:.2f} €</div>
+                </div>'''
+                for p in items
+            )
+            count_label = f'{len(items)} référence{"s" if len(items) > 1 else ""}'
+            st.markdown(f'''
+            <div class="zk-cat-block">
+                <div class="zk-cat-header">
+                    <div class="zk-cat-title">{cat_nom}</div>
+                    <div class="zk-cat-count">{count_label}</div>
+                </div>
+                {lignes_html}
+            </div>
+            ''', unsafe_allow_html=True)
     else:
-        st.info("Aucun produit dans cette catégorie.")
+        st.markdown(
+            '<div class="zk-cat-empty">Aucun produit au catalogue pour le moment.</div>',
+            unsafe_allow_html=True,
+        )
 
     section("Ajouter un produit")
     with st.form("form_add_prod", clear_on_submit=True):
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
             nom = st.text_input("Nom du produit *")
-            unite = st.text_input("Unité", value="bouteille")
         with c2:
             cat_labels = [c["nom"] for c in cats]
             cat_choice = st.selectbox("Catégorie *", cat_labels)
+        with c3:
+            format_choice = st.selectbox("Conditionnement *", FORMATS_PREDEFINIS)
+
+        c4, _, c6 = st.columns([2, 1, 1])
+        with c4:
             prix = st.number_input("Prix unitaire (€)", min_value=0.0, step=0.5, format="%.2f")
-        seuil = st.number_input("Seuil d'alerte", min_value=0.0, step=1.0, value=5.0)
-        if st.form_submit_button("Ajouter au catalogue"):
+        with c6:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            submitted = st.form_submit_button("Ajouter au catalogue", use_container_width=True)
+
+        if submitted:
             if nom.strip():
                 cid = cats[cat_labels.index(cat_choice)]["id"]
-                db.add_produit(nom.strip(), cid, unite, prix, seuil)
+                db.add_produit(nom.strip(), cid, format_choice, prix, 0)
                 st.success("Produit ajouté.")
                 st.rerun()
             else:
