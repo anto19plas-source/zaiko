@@ -73,10 +73,26 @@ def init_db():
             montant_theorique   REAL,
             note                TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS historique_prix (
+            id                INTEGER PRIMARY KEY,
+            produit_id        INTEGER REFERENCES produits(id),
+            ancien_prix       REAL,
+            nouveau_prix      REAL,
+            date_changement   TEXT
+        );
     """)
 
     if not c.execute("SELECT 1 FROM restaurants LIMIT 1").fetchone():
         _seed(c)
+
+    if not c.execute("SELECT 1 FROM historique_prix LIMIT 1").fetchone():
+        today = date.today().isoformat()
+        for p in c.execute("SELECT id, prix_unitaire FROM produits WHERE actif=1").fetchall():
+            c.execute(
+                "INSERT INTO historique_prix (produit_id, ancien_prix, nouveau_prix, date_changement) VALUES (?,?,?,?)",
+                (p["id"], p["prix_unitaire"], p["prix_unitaire"], today)
+            )
 
     conn.commit()
     conn.close()
@@ -350,9 +366,70 @@ def add_vente(restaurant_id, date_vente, montant_reel, montant_theorique, note="
 
 def add_produit(nom, categorie_id, unite, prix_unitaire, seuil_alerte):
     conn = get_connection()
-    conn.execute(
+    cur = conn.execute(
         "INSERT INTO produits (nom, categorie_id, unite, prix_unitaire, seuil_alerte) VALUES (?,?,?,?,?)",
         (nom, categorie_id, unite, prix_unitaire, seuil_alerte)
     )
+    new_id = cur.lastrowid
+    conn.execute(
+        "INSERT INTO historique_prix (produit_id, ancien_prix, nouveau_prix, date_changement) VALUES (?,?,?,?)",
+        (new_id, prix_unitaire, prix_unitaire, date.today().isoformat())
+    )
     conn.commit()
     conn.close()
+
+
+def get_produit(produit_id):
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT p.*, c.nom AS categorie_nom
+        FROM produits p
+        LEFT JOIN categories c ON p.categorie_id = c.id
+        WHERE p.id = ?
+    """, (produit_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_produit(produit_id, nom, categorie_id, unite, prix_unitaire):
+    conn = get_connection()
+    row = conn.execute("SELECT prix_unitaire FROM produits WHERE id=?", (produit_id,)).fetchone()
+    ancien_prix = row["prix_unitaire"] if row else None
+    conn.execute(
+        "UPDATE produits SET nom=?, categorie_id=?, unite=?, prix_unitaire=? WHERE id=?",
+        (nom, categorie_id, unite, prix_unitaire, produit_id)
+    )
+    if ancien_prix is not None and float(ancien_prix) != float(prix_unitaire):
+        conn.execute(
+            "INSERT INTO historique_prix (produit_id, ancien_prix, nouveau_prix, date_changement) VALUES (?,?,?,?)",
+            (produit_id, ancien_prix, prix_unitaire, date.today().isoformat())
+        )
+    conn.commit()
+    conn.close()
+
+
+def archive_produit(produit_id):
+    conn = get_connection()
+    conn.execute("UPDATE produits SET actif=0 WHERE id=?", (produit_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_historique_prix(produit_id=None, limit=None):
+    conn = get_connection()
+    q = """
+        SELECT h.*, p.nom AS produit_nom, p.unite, c.nom AS categorie_nom
+        FROM historique_prix h
+        JOIN produits p ON h.produit_id = p.id
+        LEFT JOIN categories c ON p.categorie_id = c.id
+    """
+    params = []
+    if produit_id:
+        q += " WHERE h.produit_id = ?"
+        params.append(produit_id)
+    q += " ORDER BY h.date_changement DESC, h.id DESC"
+    if limit:
+        q += f" LIMIT {int(limit)}"
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

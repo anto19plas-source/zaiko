@@ -37,6 +37,7 @@ RESTAURANTS = db.RESTAURANTS_CONFIG
 GROUPE_NAV = [
     ("groupe_dashboard", "Dashboard"),
     ("groupe_catalogue", "Catalogue"),
+    ("groupe_prix",      "Évolution des prix"),
     ("groupe_fiches",    "Fiches techniques"),
 ]
 
@@ -623,6 +624,77 @@ def inject_css():
         font-size: 13px;
         color: var(--zk-muted);
     }
+
+    /* ═══════════════════════════════════════
+       ÉVOLUTION DES PRIX — historique
+    ═══════════════════════════════════════ */
+    .zk-price-block {
+        background: white;
+        border: 1px solid var(--zk-rule);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+    .zk-price-head {
+        display: grid;
+        grid-template-columns: 110px 1fr 180px 110px;
+        gap: 16px;
+        padding: 14px 22px;
+        background: var(--zk-paper);
+        border-bottom: 1px solid var(--zk-rule);
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+    }
+    .zk-price-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 180px 110px;
+        gap: 16px;
+        align-items: center;
+        padding: 14px 22px;
+        border-bottom: 1px solid var(--zk-rule);
+    }
+    .zk-price-row:last-child { border-bottom: none; }
+    .zk-price-row:hover { background: var(--zk-paper); }
+    .zk-price-date {
+        font-family: var(--zk-font-mono);
+        font-size: 12px;
+        color: var(--zk-muted);
+    }
+    .zk-price-prod {
+        font-family: var(--zk-font-sans);
+        font-size: 14px;
+        color: var(--zk-ink);
+    }
+    .zk-price-prod-meta {
+        font-family: var(--zk-font-mono);
+        font-size: 11px;
+        color: var(--zk-muted);
+        margin-top: 2px;
+    }
+    .zk-price-evol {
+        font-family: var(--zk-font-mono);
+        font-size: 13px;
+        color: var(--zk-ink);
+        font-variant-numeric: tabular-nums;
+    }
+    .zk-price-evol-arrow {
+        color: var(--zk-muted);
+        margin: 0 8px;
+    }
+    .zk-price-var {
+        font-family: var(--zk-font-mono);
+        font-size: 13px;
+        font-weight: 500;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .zk-price-var.up   { color: var(--zk-red); }
+    .zk-price-var.down { color: var(--zk-success); }
+    .zk-price-var.flat { color: var(--zk-muted); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -883,13 +955,73 @@ def render_groupe_catalogue():
                 unsafe_allow_html=True,
             )
 
+    cat_labels = [c["nom"] for c in cats]
+
+    if produits:
+        section("Modifier une référence")
+        prod_options = {
+            f'{p["nom"]} — {p["categorie_nom"] or "Sans catégorie"} — {p["unite"]}': p["id"]
+            for p in sorted(produits, key=lambda x: (x["categorie_nom"] or "", x["nom"]))
+        }
+        prod_label = st.selectbox(
+            "Référence à modifier",
+            list(prod_options.keys()),
+            key="edit_prod_select",
+        )
+        prod_id = prod_options[prod_label]
+        prod_actuel = next(p for p in produits if p["id"] == prod_id)
+
+        with st.form("form_edit_prod"):
+            e1, e2, e3 = st.columns([2, 1, 1])
+            with e1:
+                nom_edit = st.text_input("Nom de la référence *", value=prod_actuel["nom"])
+            with e2:
+                cat_index = cat_labels.index(prod_actuel["categorie_nom"]) if prod_actuel["categorie_nom"] in cat_labels else 0
+                cat_edit = st.selectbox("Catégorie *", cat_labels, index=cat_index)
+            with e3:
+                fmt_index = FORMATS_PREDEFINIS.index(prod_actuel["unite"]) if prod_actuel["unite"] in FORMATS_PREDEFINIS else 0
+                fmt_edit = st.selectbox("Conditionnement *", FORMATS_PREDEFINIS, index=fmt_index)
+
+            e4, e5, e6 = st.columns([2, 1, 1])
+            with e4:
+                prix_edit = st.number_input(
+                    "Prix unitaire (€)",
+                    min_value=0.0, step=0.5, format="%.2f",
+                    value=float(prod_actuel["prix_unitaire"] or 0.0),
+                )
+            with e5:
+                confirm_delete = st.checkbox("Confirmer la suppression")
+            with e6:
+                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+
+            b1, b2 = st.columns(2)
+            with b1:
+                save_btn = st.form_submit_button("Enregistrer les modifications", use_container_width=True)
+            with b2:
+                delete_btn = st.form_submit_button("Supprimer la référence", use_container_width=True)
+
+            if save_btn:
+                if nom_edit.strip():
+                    cid_edit = cats[cat_labels.index(cat_edit)]["id"]
+                    db.update_produit(prod_id, nom_edit.strip(), cid_edit, fmt_edit, prix_edit)
+                    st.success("Modifications enregistrées.")
+                    st.rerun()
+                else:
+                    st.error("Le nom de la référence est requis.")
+            elif delete_btn:
+                if confirm_delete:
+                    db.archive_produit(prod_id)
+                    st.success("Référence supprimée.")
+                    st.rerun()
+                else:
+                    st.error("Coche « Confirmer la suppression » avant de supprimer.")
+
     section("Ajouter un produit")
     with st.form("form_add_prod", clear_on_submit=True):
         c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
             nom = st.text_input("Nom du produit *")
         with c2:
-            cat_labels = [c["nom"] for c in cats]
             cat_choice = st.selectbox("Catégorie *", cat_labels)
         with c3:
             format_choice = st.selectbox("Conditionnement *", FORMATS_PREDEFINIS)
@@ -909,6 +1041,137 @@ def render_groupe_catalogue():
                 st.rerun()
             else:
                 st.error("Le nom du produit est requis.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  GROUPE WAC — ÉVOLUTION DES PRIX
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_groupe_prix():
+    page_header("Groupe WAC", "Évolution des prix",
+                "Suivi des variations tarifaires par référence")
+
+    historique = db.get_historique_prix()
+    changements = [h for h in historique if float(h["ancien_prix"]) != float(h["nouveau_prix"])]
+
+    if not changements:
+        st.markdown(
+            '<div class="zk-cat-empty">Aucun changement de prix enregistré pour le moment. '
+            'Les variations apparaîtront ici dès que tu modifieras un prix dans le catalogue.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    nb_changements = len(changements)
+    derniere_date = max(h["date_changement"] for h in changements)
+    variations = [
+        ((h["nouveau_prix"] - h["ancien_prix"]) / h["ancien_prix"] * 100)
+        for h in changements if h["ancien_prix"]
+    ]
+    var_moyenne = sum(variations) / len(variations) if variations else 0
+
+    k1, k2, k3 = st.columns(3)
+    with k1: kpi("Changements de prix", str(nb_changements), "depuis la mise en service")
+    with k2: kpi("Dernière modification", derniere_date, accent="navy")
+    with k3:
+        signe = "+" if var_moyenne >= 0 else ""
+        kpi("Variation moyenne", f"{signe}{var_moyenne:.1f} %",
+            "moyenne pondérée sur l'ensemble", accent="navy")
+
+    section("Filtrer par référence")
+    produits_avec_histo = sorted(
+        {(h["produit_id"], h["produit_nom"], h["unite"], h["categorie_nom"] or "Sans catégorie")
+         for h in historique},
+        key=lambda x: (x[3], x[1])
+    )
+    options = {"Toutes les références": None}
+    for pid, pnom, punite, pcat in produits_avec_histo:
+        options[f"{pnom} — {pcat} — {punite}"] = pid
+
+    choix = st.selectbox(
+        "Référence",
+        list(options.keys()),
+        label_visibility="collapsed",
+    )
+    produit_id = options[choix]
+
+    if produit_id:
+        histo_prod = db.get_historique_prix(produit_id=produit_id)
+        histo_prod_chrono = sorted(histo_prod, key=lambda h: h["date_changement"])
+
+        if len(histo_prod_chrono) >= 1:
+            section(f"Courbe d'évolution — {choix}")
+            dates = [h["date_changement"] for h in histo_prod_chrono]
+            prix = [h["nouveau_prix"] for h in histo_prod_chrono]
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=dates, y=prix,
+                mode="lines+markers",
+                line=dict(color=NAVY, width=2.5, shape="hv"),
+                marker=dict(color=GOLD, size=9, line=dict(color=NAVY, width=1.5)),
+                hovertemplate="%{x}<br>%{y:.2f} €<extra></extra>",
+            ))
+            plotly_layout(fig, height=320)
+            fig.update_yaxes(title=None, tickprefix="", ticksuffix=" €")
+            fig.update_xaxes(title=None)
+            st.plotly_chart(fig, use_container_width=True)
+
+        section("Historique des changements")
+        rows = [h for h in histo_prod if float(h["ancien_prix"]) != float(h["nouveau_prix"])]
+    else:
+        section("Derniers changements")
+        rows = changements[:30]
+
+    if not rows:
+        st.markdown(
+            '<div class="zk-cat-empty">Aucun changement de prix pour cette référence.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    lignes_html = []
+    for h in rows:
+        ancien = float(h["ancien_prix"])
+        nouveau = float(h["nouveau_prix"])
+        if ancien == 0:
+            var_pct = 0.0
+        else:
+            var_pct = (nouveau - ancien) / ancien * 100
+        if var_pct > 0:
+            cls = "up"
+            signe = "+"
+        elif var_pct < 0:
+            cls = "down"
+            signe = ""
+        else:
+            cls = "flat"
+            signe = ""
+        lignes_html.append(f'''
+            <div class="zk-price-row">
+                <div class="zk-price-date">{h["date_changement"]}</div>
+                <div>
+                    <div class="zk-price-prod">{h["produit_nom"]}</div>
+                    <div class="zk-price-prod-meta">{(h["categorie_nom"] or "Sans catégorie")} · {h["unite"]}</div>
+                </div>
+                <div class="zk-price-evol">
+                    {ancien:.2f} €<span class="zk-price-evol-arrow">→</span>{nouveau:.2f} €
+                </div>
+                <div class="zk-price-var {cls}">{signe}{var_pct:.1f} %</div>
+            </div>
+        ''')
+
+    st.markdown(f'''
+    <div class="zk-price-block">
+        <div class="zk-price-head">
+            <div>Date</div>
+            <div>Référence</div>
+            <div>Évolution</div>
+            <div style="text-align:right;">Variation</div>
+        </div>
+        {"".join(lignes_html)}
+    </div>
+    ''', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1233,6 +1496,7 @@ def render_resto_ventes(resto: dict):
 def route(page: str):
     if page == "groupe_dashboard": return render_groupe_dashboard()
     if page == "groupe_catalogue": return render_groupe_catalogue()
+    if page == "groupe_prix":      return render_groupe_prix()
     if page == "groupe_fiches":    return render_groupe_fiches()
 
     for r in RESTAURANTS:
