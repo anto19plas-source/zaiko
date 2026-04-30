@@ -56,9 +56,10 @@ TYPE_MV_COLORS = {
 }
 
 FORMATS_PREDEFINIS = [
-    "20cl", "25cl", "33cl", "37.5cl", "50cl", "70cl", "75cl",
-    "1L", "1.5L", "2L", "5L",
-    "100g", "250g", "500g", "750g", "1kg", "2kg", "5kg", "10kg",
+    "bouteille",
+    "10cl", "20cl", "25cl", "33cl", "37.5cl", "48.5cl", "50cl", "70cl", "75cl",
+    "1L", "1.5L", "2L", "3L", "5L", "10L", "20L", "30L",
+    "100g", "150g", "250g", "500g", "750g", "1kg", "2kg", "5kg", "10kg",
     "pièce", "lot", "carton",
 ]
 
@@ -614,6 +615,12 @@ def inject_css():
         text-align: right;
         font-variant-numeric: tabular-nums;
     }
+    .zk-prod-price.zk-no-price {
+        color: var(--zk-red);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-size: 11px;
+    }
     .zk-cat-empty {
         background: white;
         border: 1px solid var(--zk-rule);
@@ -931,11 +938,15 @@ def render_groupe_catalogue():
         if produits_par_cat:
             for cat_nom in sorted(produits_par_cat.keys()):
                 items = produits_par_cat[cat_nom]
+                def _price_html(p):
+                    if not p["prix_unitaire"] or float(p["prix_unitaire"]) == 0:
+                        return '<div class="zk-prod-price zk-no-price">prix à définir</div>'
+                    return f'<div class="zk-prod-price">{p["prix_unitaire"]:.2f} €</div>'
                 lignes_html = "".join(
                     f'''<div class="zk-prod-line">
                         <div class="zk-prod-name">{p["nom"]}</div>
                         <div class="zk-prod-format">{p["unite"]}</div>
-                        <div class="zk-prod-price">{p["prix_unitaire"]:.2f} €</div>
+                        {_price_html(p)}
                     </div>'''
                     for p in items
                 )

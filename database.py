@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import date, timedelta
 import random
+from seed_data import CATEGORIES as SEED_CATEGORIES, PRODUITS as SEED_PRODUITS
 
 DB_PATH = "zaiko.db"
 
@@ -106,52 +107,18 @@ def _seed(c):
         (4, "Les Halles de la Cité", "Brasserie",           "#C9A24B", "Paris 1er"),
     ])
 
-    c.executemany("INSERT INTO categories VALUES (?,?,?)", [
-        (1, "Alcools",          ""),
-        (2, "Soft & Jus",       ""),
-        (3, "Viandes",          ""),
-        (4, "Légumes",          ""),
-        (5, "Produits laitiers",""),
-        (6, "Épicerie",         ""),
-    ])
+    c.executemany("INSERT INTO categories (id, nom, emoji) VALUES (?,?,?)",
+                  [(cid, nom, "") for cid, nom in SEED_CATEGORIES])
 
-    c.executemany("INSERT INTO produits VALUES (?,?,?,?,?,?,1)", [
-        (1,  "Gin Hendricks",          1, "70cl",  28.50,  3),
-        (2,  "Vodka Grey Goose",       1, "70cl",  32.00,  3),
-        (3,  "Rum Bacardi",            1, "70cl",  18.50,  5),
-        (4,  "Whisky Monkey Shoulder", 1, "70cl",  24.00,  3),
-        (5,  "Champagne Billecart",    1, "75cl",  45.00,  6),
-        (6,  "Jus d'orange frais",     2, "1L",     4.50, 10),
-        (7,  "Sirop de sucre",         2, "1L",     3.00,  5),
-        (8,  "Coca-Cola",              2, "33cl",   1.50, 24),
-        (9,  "Bœuf haché",             3, "1kg",   12.00,  5),
-        (10, "Poulet fermier",         3, "1kg",    8.50,  8),
-        (11, "Tomates cerises",        4, "500g",   4.00,  5),
-        (12, "Avocat",                 4, "pièce",  1.20, 20),
-        (13, "Comté 18 mois",          5, "500g",  22.00,  2),
-        (14, "Crème fraîche",          5, "500g",   3.50,  5),
-        (15, "Sel de mer",             6, "1kg",    2.00,  2),
-    ])
+    c.executemany(
+        "INSERT INTO produits (id, nom, categorie_id, unite, prix_unitaire, seuil_alerte, actif) VALUES (?,?,?,?,?,0,1)",
+        [(pid, nom, cid, fmt, prix) for pid, nom, cid, fmt, prix in SEED_PRODUITS]
+    )
 
     random.seed(42)
     today = date.today()
 
-    inv_id = 1
-    for r in range(1, 5):
-        for p in range(1, 16):
-            qty = round(random.uniform(1, 40), 1)
-            c.execute("INSERT INTO inventaire VALUES (?,?,?,?,?,?)",
-                      (inv_id, r, p, qty, today.isoformat(), None))
-            inv_id += 1
-
-    types_mv = ["entrée", "sortie", "perte", "transfert"]
-    for mv_id in range(1, 101):
-        d = (today - timedelta(days=random.randint(0, 30))).isoformat()
-        c.execute("INSERT INTO mouvements VALUES (?,?,?,?,?,?,?)", (
-            mv_id, random.randint(1, 4), random.randint(1, 15),
-            random.choice(types_mv), round(random.uniform(1, 12), 1), d, None,
-        ))
-
+    nb_produits = len(SEED_PRODUITS)
     base_ca = {1: 2200, 2: 2800, 3: 3200, 4: 1800}
     v_id = 1
     for i in range(30):
