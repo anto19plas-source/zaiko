@@ -814,37 +814,74 @@ def render_groupe_catalogue():
     cats = db.get_categories()
     produits = db.get_produits()
 
-    produits_par_cat = {}
-    for p in produits:
-        key = p["categorie_nom"] or "Sans catégorie"
-        produits_par_cat.setdefault(key, []).append(p)
-
-    if produits:
-        for cat_nom in sorted(produits_par_cat.keys()):
-            items = produits_par_cat[cat_nom]
-            lignes_html = "".join(
-                f'''<div class="zk-prod-line">
-                    <div class="zk-prod-name">{p["nom"]}</div>
-                    <div class="zk-prod-format">{p["unite"]}</div>
-                    <div class="zk-prod-price">{p["prix_unitaire"]:.2f} €</div>
-                </div>'''
-                for p in items
-            )
-            count_label = f'{len(items)} référence{"s" if len(items) > 1 else ""}'
-            st.markdown(f'''
-            <div class="zk-cat-block">
-                <div class="zk-cat-header">
-                    <div class="zk-cat-title">{cat_nom}</div>
-                    <div class="zk-cat-count">{count_label}</div>
-                </div>
-                {lignes_html}
-            </div>
-            ''', unsafe_allow_html=True)
-    else:
+    if not produits:
         st.markdown(
             '<div class="zk-cat-empty">Aucun produit au catalogue pour le moment.</div>',
             unsafe_allow_html=True,
         )
+    else:
+        formats_dispos = sorted({p["unite"] for p in produits if p["unite"]})
+        cats_dispos = sorted({p["categorie_nom"] for p in produits if p["categorie_nom"]})
+
+        f1, f2, f3 = st.columns([2, 1, 1])
+        with f1:
+            recherche = st.text_input(
+                "Rechercher une référence",
+                placeholder="Rechercher une référence…",
+                label_visibility="collapsed",
+            )
+        with f2:
+            cat_filter = st.selectbox(
+                "Catégorie",
+                ["Toutes catégories"] + cats_dispos,
+                label_visibility="collapsed",
+            )
+        with f3:
+            fmt_filter = st.selectbox(
+                "Conditionnement",
+                ["Tous conditionnements"] + formats_dispos,
+                label_visibility="collapsed",
+            )
+
+        terme = recherche.strip().lower()
+        produits_filtres = [
+            p for p in produits
+            if (not terme or terme in p["nom"].lower())
+            and (cat_filter == "Toutes catégories" or p["categorie_nom"] == cat_filter)
+            and (fmt_filter == "Tous conditionnements" or p["unite"] == fmt_filter)
+        ]
+
+        produits_par_cat = {}
+        for p in produits_filtres:
+            key = p["categorie_nom"] or "Sans catégorie"
+            produits_par_cat.setdefault(key, []).append(p)
+
+        if produits_par_cat:
+            for cat_nom in sorted(produits_par_cat.keys()):
+                items = produits_par_cat[cat_nom]
+                lignes_html = "".join(
+                    f'''<div class="zk-prod-line">
+                        <div class="zk-prod-name">{p["nom"]}</div>
+                        <div class="zk-prod-format">{p["unite"]}</div>
+                        <div class="zk-prod-price">{p["prix_unitaire"]:.2f} €</div>
+                    </div>'''
+                    for p in items
+                )
+                count_label = f'{len(items)} référence{"s" if len(items) > 1 else ""}'
+                st.markdown(f'''
+                <div class="zk-cat-block">
+                    <div class="zk-cat-header">
+                        <div class="zk-cat-title">{cat_nom}</div>
+                        <div class="zk-cat-count">{count_label}</div>
+                    </div>
+                    {lignes_html}
+                </div>
+                ''', unsafe_allow_html=True)
+        else:
+            st.markdown(
+                '<div class="zk-cat-empty">Aucune référence ne correspond aux filtres.</div>',
+                unsafe_allow_html=True,
+            )
 
     section("Ajouter un produit")
     with st.form("form_add_prod", clear_on_submit=True):
