@@ -48,12 +48,14 @@ def init_db():
         );
 
         CREATE TABLE IF NOT EXISTS inventaire (
-            id              INTEGER PRIMARY KEY,
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
             restaurant_id   INTEGER REFERENCES restaurants(id),
             produit_id      INTEGER REFERENCES produits(id),
+            lieu            TEXT    DEFAULT 'reserve',
             quantite        REAL    DEFAULT 0,
             date_saisie     TEXT,
-            note            TEXT
+            note            TEXT,
+            UNIQUE (restaurant_id, produit_id, lieu)
         );
 
         CREATE TABLE IF NOT EXISTS mouvements (
@@ -103,7 +105,32 @@ def init_db():
             unite_recette   TEXT NOT NULL,
             ordre           INTEGER DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS inventaires_mensuels (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            restaurant_id   INTEGER NOT NULL REFERENCES restaurants(id),
+            mois            TEXT NOT NULL,
+            date_cloture    TEXT NOT NULL,
+            valeur_totale   REAL DEFAULT 0,
+            nb_refs         INTEGER DEFAULT 0,
+            notes           TEXT DEFAULT '',
+            UNIQUE (restaurant_id, mois)
+        );
+
+        CREATE TABLE IF NOT EXISTS inventaire_mensuel_lignes (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            inventaire_mensuel_id INTEGER NOT NULL REFERENCES inventaires_mensuels(id) ON DELETE CASCADE,
+            produit_id      INTEGER NOT NULL REFERENCES produits(id),
+            lieu            TEXT NOT NULL,
+            quantite        REAL NOT NULL,
+            prix_snapshot   REAL NOT NULL
+        );
     """)
+
+    # Migration douce : ajouter la colonne `lieu` si elle manque (DB existante)
+    cols = [r[1] for r in c.execute("PRAGMA table_info(inventaire)").fetchall()]
+    if "lieu" not in cols:
+        c.execute("ALTER TABLE inventaire ADD COLUMN lieu TEXT DEFAULT 'reserve'")
 
     if not c.execute("SELECT 1 FROM restaurants LIMIT 1").fetchone():
         _seed(c)
@@ -202,13 +229,21 @@ def get_inventaire(restaurant_id):
 
 
 def get_alertes(restaurant_id):
+    """Alertes par produit (somme sur tous les lieux), seuil non atteint."""
     conn = get_connection()
     rows = conn.execute("""
-        SELECT i.*, p.nom AS produit_nom, p.unite, p.seuil_alerte
+        SELECT
+            p.id              AS produit_id,
+            p.nom             AS produit_nom,
+            p.unite           AS unite,
+            p.seuil_alerte    AS seuil_alerte,
+            SUM(i.quantite)   AS quantite
         FROM inventaire i
         JOIN produits p ON i.produit_id = p.id
-        WHERE i.restaurant_id = ? AND i.quantite <= p.seuil_alerte
-        ORDER BY i.quantite ASC
+        WHERE i.restaurant_id = ? AND p.actif = 1
+        GROUP BY p.id
+        HAVING SUM(i.quantite) > 0 AND SUM(i.quantite) < p.seuil_alerte
+        ORDER BY SUM(i.quantite) ASC
     """, (restaurant_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -267,13 +302,19 @@ def get_kpis_groupe():
 
 def get_kpis_resto(restaurant_id):
     conn = get_connection()
-    nb_articles = conn.execute(
-        "SELECT COUNT(*) FROM inventaire WHERE restaurant_id=?", (restaurant_id,)
-    ).fetchone()[0]
-    nb_alertes = conn.execute("""
-        SELECT COUNT(*) FROM inventaire i
+    nb_articles = conn.execute("""
+        SELECT COUNT(DISTINCT i.produit_id) FROM inventaire i
         JOIN produits p ON i.produit_id = p.id
-        WHERE i.restaurant_id=? AND i.quantite <= p.seuil_alerte
+        WHERE i.restaurant_id=? AND p.actif=1 AND i.quantite > 0
+    """, (restaurant_id,)).fetchone()[0]
+    nb_alertes = conn.execute("""
+        SELECT COUNT(*) FROM (
+            SELECT p.id FROM inventaire i
+            JOIN produits p ON i.produit_id = p.id
+            WHERE i.restaurant_id=? AND p.actif=1
+            GROUP BY p.id
+            HAVING SUM(i.quantite) > 0 AND SUM(i.quantite) < p.seuil_alerte
+        )
     """, (restaurant_id,)).fetchone()[0]
     since_7j = (date.today() - timedelta(days=7)).isoformat()
     ca_7j = conn.execute(
@@ -513,3 +554,280 @@ def replace_fiche_ingredients(fiche_id, ingredients):
         )
     conn.commit()
     conn.close()
+
+
+# ─── Inventaire (par lieu : bar / reserve) ───────────────────────────────────
+
+LIEUX_INVENTAIRE = ["bar", "reserve"]
+
+
+def get_inventaire_resto(restaurant_id):
+    """
+    Retourne pour chaque produit du catalogue actif :
+    {produit_id, nom, categorie_nom, unite, prix_unitaire, seuil_alerte,
+     qte_bar, qte_reserve, qte_total, valeur, derniere_saisie, note}
+    """
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            p.id              AS produit_id,
+            p.nom             AS nom,
+            p.unite           AS unite,
+            p.prix_unitaire   AS prix_unitaire,
+            p.seuil_alerte    AS seuil_alerte,
+            c.nom             AS categorie_nom,
+            COALESCE(SUM(CASE WHEN i.lieu = 'bar'     THEN i.quantite END), 0) AS qte_bar,
+            COALESCE(SUM(CASE WHEN i.lieu = 'reserve' THEN i.quantite END), 0) AS qte_reserve,
+            COALESCE(SUM(i.quantite), 0) AS qte_total,
+            MAX(i.date_saisie) AS derniere_saisie
+        FROM produits p
+        LEFT JOIN categories c ON p.categorie_id = c.id
+        LEFT JOIN inventaire i ON i.produit_id = p.id AND i.restaurant_id = ?
+        WHERE p.actif = 1
+        GROUP BY p.id
+        ORDER BY c.nom, p.nom
+    """, (restaurant_id,)).fetchall()
+    conn.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        prix = float(d.get("prix_unitaire") or 0)
+        d["valeur"] = prix * float(d.get("qte_total") or 0)
+        out.append(d)
+    return out
+
+
+def get_inventaire_produit(restaurant_id, produit_id):
+    """Retourne {qte_bar, qte_reserve, note_bar, note_reserve} pour un produit."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT lieu, quantite, note FROM inventaire
+        WHERE restaurant_id = ? AND produit_id = ?
+    """, (restaurant_id, produit_id)).fetchall()
+    conn.close()
+    out = {"qte_bar": 0.0, "qte_reserve": 0.0, "note_bar": "", "note_reserve": ""}
+    for r in rows:
+        lieu = r["lieu"] or "reserve"
+        if lieu == "bar":
+            out["qte_bar"] = float(r["quantite"] or 0)
+            out["note_bar"] = r["note"] or ""
+        elif lieu == "reserve":
+            out["qte_reserve"] = float(r["quantite"] or 0)
+            out["note_reserve"] = r["note"] or ""
+    return out
+
+
+def set_inventaire_ligne(restaurant_id, produit_id, lieu, quantite, note=None):
+    """Upsert d'une ligne d'inventaire pour un (resto, produit, lieu)."""
+    if lieu not in LIEUX_INVENTAIRE:
+        raise ValueError(f"Lieu invalide : {lieu}")
+    conn = get_connection()
+    today = date.today().isoformat()
+    existing = conn.execute(
+        "SELECT id, note FROM inventaire WHERE restaurant_id=? AND produit_id=? AND lieu=?",
+        (restaurant_id, produit_id, lieu)
+    ).fetchone()
+    if existing:
+        if note is None:
+            conn.execute(
+                "UPDATE inventaire SET quantite=?, date_saisie=? WHERE id=?",
+                (float(quantite or 0), today, existing["id"])
+            )
+        else:
+            conn.execute(
+                "UPDATE inventaire SET quantite=?, date_saisie=?, note=? WHERE id=?",
+                (float(quantite or 0), today, note, existing["id"])
+            )
+    else:
+        conn.execute(
+            """INSERT INTO inventaire (restaurant_id, produit_id, lieu, quantite, date_saisie, note)
+               VALUES (?,?,?,?,?,?)""",
+            (restaurant_id, produit_id, lieu, float(quantite or 0), today, note or "")
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_kpis_inventaire(restaurant_id):
+    """Retourne {nb_refs_en_stock, valeur_totale, nb_alertes, derniere_saisie}."""
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT
+            SUM(CASE WHEN totaux.qte_total > 0 THEN 1 ELSE 0 END) AS nb_refs,
+            COALESCE(SUM(totaux.qte_total * p.prix_unitaire), 0) AS valeur_totale,
+            SUM(CASE WHEN totaux.qte_total > 0 AND totaux.qte_total < p.seuil_alerte THEN 1 ELSE 0 END) AS nb_alertes,
+            MAX(totaux.derniere_saisie) AS derniere_saisie
+        FROM (
+            SELECT produit_id,
+                   SUM(quantite) AS qte_total,
+                   MAX(date_saisie) AS derniere_saisie
+            FROM inventaire
+            WHERE restaurant_id = ?
+            GROUP BY produit_id
+        ) totaux
+        JOIN produits p ON p.id = totaux.produit_id
+        WHERE p.actif = 1
+    """, (restaurant_id,)).fetchone()
+    conn.close()
+    return {
+        "nb_refs": int(row["nb_refs"] or 0),
+        "valeur_totale": float(row["valeur_totale"] or 0),
+        "nb_alertes": int(row["nb_alertes"] or 0),
+        "derniere_saisie": row["derniere_saisie"] or "—",
+    }
+
+
+# ─── Inventaires mensuels (snapshots figés) ──────────────────────────────────
+
+def cloturer_inventaire_mois(restaurant_id, mois):
+    """
+    Crée (ou écrase) un snapshot mensuel pour (resto, mois). 'mois' au format 'YYYY-MM'.
+    Snapshot = copie de toutes les lignes inventaire courant avec prix unitaire figé.
+    Retourne l'id du snapshot.
+    """
+    conn = get_connection()
+    today = date.today().isoformat()
+
+    # Supprimer un snapshot existant pour ce mois (écrasement)
+    existing = conn.execute(
+        "SELECT id FROM inventaires_mensuels WHERE restaurant_id=? AND mois=?",
+        (restaurant_id, mois)
+    ).fetchone()
+    if existing:
+        conn.execute("DELETE FROM inventaire_mensuel_lignes WHERE inventaire_mensuel_id=?", (existing["id"],))
+        conn.execute("DELETE FROM inventaires_mensuels WHERE id=?", (existing["id"],))
+
+    # Snapshot des lignes courantes (uniquement celles avec quantité > 0)
+    lignes = conn.execute("""
+        SELECT i.produit_id, i.lieu, i.quantite, p.prix_unitaire
+        FROM inventaire i
+        JOIN produits p ON p.id = i.produit_id
+        WHERE i.restaurant_id = ? AND p.actif = 1 AND i.quantite > 0
+    """, (restaurant_id,)).fetchall()
+
+    # Calcul valeur totale et nb refs distinctes
+    valeur_totale = 0.0
+    refs_set = set()
+    for l in lignes:
+        valeur_totale += float(l["quantite"] or 0) * float(l["prix_unitaire"] or 0)
+        refs_set.add(l["produit_id"])
+
+    cur = conn.execute(
+        """INSERT INTO inventaires_mensuels (restaurant_id, mois, date_cloture, valeur_totale, nb_refs, notes)
+           VALUES (?,?,?,?,?,'')""",
+        (restaurant_id, mois, today, valeur_totale, len(refs_set))
+    )
+    snapshot_id = cur.lastrowid
+
+    for l in lignes:
+        conn.execute(
+            """INSERT INTO inventaire_mensuel_lignes
+               (inventaire_mensuel_id, produit_id, lieu, quantite, prix_snapshot)
+               VALUES (?,?,?,?,?)""",
+            (snapshot_id, l["produit_id"], l["lieu"] or "reserve",
+             float(l["quantite"] or 0), float(l["prix_unitaire"] or 0))
+        )
+
+    conn.commit()
+    conn.close()
+    return snapshot_id
+
+
+def get_inventaires_mensuels(restaurant_id):
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT * FROM inventaires_mensuels
+        WHERE restaurant_id = ?
+        ORDER BY mois DESC
+    """, (restaurant_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_inventaire_mensuel(snapshot_id):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM inventaires_mensuels WHERE id = ?",
+        (snapshot_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_snapshot_lignes(snapshot_id):
+    """
+    Retourne les lignes d'un snapshot agrégées par produit, avec qté par lieu.
+    """
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            l.produit_id,
+            p.nom AS produit_nom,
+            p.unite AS unite,
+            c.nom AS categorie_nom,
+            COALESCE(SUM(CASE WHEN l.lieu='bar'     THEN l.quantite END), 0) AS qte_bar,
+            COALESCE(SUM(CASE WHEN l.lieu='reserve' THEN l.quantite END), 0) AS qte_reserve,
+            SUM(l.quantite) AS qte_total,
+            MAX(l.prix_snapshot) AS prix_snapshot,
+            SUM(l.quantite * l.prix_snapshot) AS valeur
+        FROM inventaire_mensuel_lignes l
+        JOIN produits p ON p.id = l.produit_id
+        LEFT JOIN categories c ON p.categorie_id = c.id
+        WHERE l.inventaire_mensuel_id = ?
+        GROUP BY l.produit_id
+        ORDER BY c.nom, p.nom
+    """, (snapshot_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_snapshot_produit(snapshot_id, produit_id):
+    """Détail d'un produit dans un snapshot : qté par lieu, prix figé, valeur."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT lieu, quantite, prix_snapshot
+        FROM inventaire_mensuel_lignes
+        WHERE inventaire_mensuel_id = ? AND produit_id = ?
+    """, (snapshot_id, produit_id)).fetchall()
+    conn.close()
+    out = {"qte_bar": 0.0, "qte_reserve": 0.0, "prix_snapshot": 0.0, "valeur": 0.0}
+    for r in rows:
+        lieu = r["lieu"] or "reserve"
+        q = float(r["quantite"] or 0)
+        out["prix_snapshot"] = float(r["prix_snapshot"] or 0)
+        if lieu == "bar":
+            out["qte_bar"] = q
+        elif lieu == "reserve":
+            out["qte_reserve"] = q
+    out["qte_total"] = out["qte_bar"] + out["qte_reserve"]
+    out["valeur"] = out["qte_total"] * out["prix_snapshot"]
+    return out
+
+
+def get_kpis_historique_inventaire(restaurant_id):
+    """KPIs pour la page historique : valeur dernier, variation vs M-1, nb refs, moyenne 3M."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT mois, valeur_totale, nb_refs
+        FROM inventaires_mensuels
+        WHERE restaurant_id = ?
+        ORDER BY mois DESC
+        LIMIT 3
+    """, (restaurant_id,)).fetchall()
+    conn.close()
+
+    snaps = [dict(r) for r in rows]
+    if not snaps:
+        return {"valeur_dernier": 0.0, "variation": None, "nb_refs": 0, "moyenne_3m": 0.0, "dernier_mois": None}
+    dernier = snaps[0]
+    variation = None
+    if len(snaps) >= 2 and snaps[1]["valeur_totale"]:
+        variation = (dernier["valeur_totale"] - snaps[1]["valeur_totale"]) / snaps[1]["valeur_totale"] * 100
+    moyenne = sum(s["valeur_totale"] for s in snaps) / len(snaps)
+    return {
+        "valeur_dernier": float(dernier["valeur_totale"] or 0),
+        "variation": variation,
+        "nb_refs": int(dernier["nb_refs"] or 0),
+        "moyenne_3m": float(moyenne),
+        "dernier_mois": dernier["mois"],
+    }

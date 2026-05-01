@@ -43,7 +43,7 @@ GROUPE_NAV = [
 RESTO_NAV = [
     ("dashboard",   "Dashboard"),
     ("inventaire",  "Inventaire"),
-    ("mouvements",  "Mouvements"),
+    ("historique",  "Historique inventaire"),
     ("ventes",      "Ventes & Ratios"),
     ("fiches",      "Fiches techniques"),
 ]
@@ -1030,6 +1030,71 @@ def inject_css():
         margin-top: 12px;
         margin-bottom: 4px;
     }
+
+    /* ═══════════════════════════════════════
+       INVENTAIRE — saisie inline
+    ═══════════════════════════════════════ */
+    .zk-inv-head {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr 0.7fr 0.9fr 0.7fr;
+        gap: 14px;
+        padding: 10px 18px;
+        background: var(--zk-paper);
+        border: 1px solid var(--zk-rule);
+        border-radius: 0;
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+        margin-top: 0;
+        margin-bottom: 4px;
+    }
+    .zk-inv-snap-head {
+        display: grid;
+        grid-template-columns: 2fr 0.8fr 0.6fr 0.6fr 0.6fr 0.7fr 0.8fr 0.7fr;
+        gap: 14px;
+        padding: 10px 18px;
+        background: var(--zk-paper);
+        border: 1px solid var(--zk-rule);
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+        margin-top: 0;
+        margin-bottom: 4px;
+    }
+    .zk-inv-alert-tag {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 8px;
+        background: rgba(178, 58, 42, .12);
+        color: var(--zk-red);
+        border-radius: 999px;
+        font-family: var(--zk-font-mono);
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        vertical-align: middle;
+    }
+    .zk-inv-alert-num {
+        color: var(--zk-red) !important;
+        font-weight: 600;
+    }
+    .zk-help-line {
+        background: var(--zk-paper);
+        border: 1px solid var(--zk-rule);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-family: var(--zk-font-sans);
+        font-size: 13px;
+        color: var(--zk-muted);
+        line-height: 1.5;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1899,7 +1964,7 @@ def render_resto_dashboard(resto: dict):
                 <div class="zk-alert">
                     <div style="flex:1;">
                         <div class="zk-alert-name">{a["produit_nom"]}</div>
-                        <div class="zk-alert-meta">{a["quantite"]} {a["unite"]} · seuil {a["seuil_alerte"]}</div>
+                        <div class="zk-alert-meta">{a["quantite"]:.1f} {a["unite"]} · seuil {a["seuil_alerte"]:.0f}</div>
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
@@ -1907,80 +1972,476 @@ def render_resto_dashboard(resto: dict):
             st.markdown('<div class="zk-empty-ok">Tous les stocks sont au-dessus des seuils.</div>',
                         unsafe_allow_html=True)
 
-    section("Derniers mouvements")
-    mvts = db.get_mouvements(rid, limit=5)
-    if mvts:
-        df = pd.DataFrame([{
-            "Date":     m["date_mouvement"],
-            "Produit":  m["produit_nom"],
-            "Type":     m["type_mouvement"],
-            "Quantité": f"{m['quantite']} {m['unite']}",
-        } for m in mvts])
-        st.dataframe(df, use_container_width=True, hide_index=True)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  RESTAURANT — INVENTAIRE
+#  RESTAURANT — INVENTAIRE (saisie inline par lieu : bar / réserve)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def _save_qte_callback(rid, pid, lieu, key):
+    """Callback déclenché à chaque changement d'un number_input de qté."""
+    val = st.session_state.get(key)
+    if val is None:
+        return
+    try:
+        db.set_inventaire_ligne(rid, pid, lieu, float(val))
+    except Exception:
+        pass
+
 
 def render_resto_inventaire(resto: dict):
     rid = resto["id"]
 
-    page_header(resto["nom"], "Inventaire", "Consultation et mise à jour des stocks")
+    # Si fiche stock ouverte
+    viewing_pid = st.session_state.get("viewing_stock_pid")
+    viewing_resto = st.session_state.get("viewing_stock_resto")
+    if viewing_pid and viewing_resto == rid:
+        render_fiche_stock(resto, viewing_pid)
+        return
 
-    inv = db.get_inventaire(rid)
+    page_header(resto["type"], "Inventaire",
+                "Saisie directe par lieu : bar et réserve")
+    render_resto_banner(resto)
 
-    if inv:
-        cats_present = sorted({i["categorie_nom"] for i in inv if i["categorie_nom"]})
-        cat_filter = st.selectbox(
-            "Catégorie", ["Toutes catégories"] + cats_present,
-            label_visibility="collapsed", key=f"inv_cat_{rid}"
+    inv = db.get_inventaire_resto(rid)
+    kpis = db.get_kpis_inventaire(rid)
+
+    # ── 4 KPIs ──
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: kpi("Références en stock", str(kpis["nb_refs"]), "qté > 0")
+    with c2: kpi("Valeur totale stock", f"{kpis['valeur_totale']:,.2f} €", "tous lieux confondus", accent="navy")
+    with c3:
+        kpi("Alertes", str(kpis["nb_alertes"]), "sous seuil",
+            accent="red" if kpis["nb_alertes"] else "success")
+    with c4: kpi("Dernière saisie", kpis["derniere_saisie"], accent="navy")
+
+    # ── Filtres ──
+    cats_dispos = sorted({i["categorie_nom"] for i in inv if i["categorie_nom"]})
+    f1, f2, f3 = st.columns([2, 1, 1])
+    with f1:
+        recherche = st.text_input(
+            "Rechercher", placeholder="Rechercher une référence…",
+            label_visibility="collapsed", key=f"inv_search_{rid}",
         )
-        inv_view = inv if cat_filter == "Toutes catégories" else [i for i in inv if i["categorie_nom"] == cat_filter]
+    with f2:
+        cat_filter = st.selectbox(
+            "Catégorie", ["Toutes catégories"] + cats_dispos,
+            label_visibility="collapsed", key=f"inv_cat_{rid}",
+        )
+    with f3:
+        lieu_filter = st.selectbox(
+            "Lieu", ["Tous lieux", "Bar uniquement", "Réserve uniquement"],
+            label_visibility="collapsed", key=f"inv_lieu_{rid}",
+        )
 
-        rows = []
-        for i in inv_view:
-            en_alerte = i["quantite"] <= i["seuil_alerte"]
-            rows.append({
-                "Catégorie":    i["categorie_nom"] or "—",
-                "Produit":      i["produit_nom"],
-                "Quantité":     i["quantite"],
-                "Unité":        i["unite"],
-                "Seuil":        i["seuil_alerte"],
-                "Valeur (€)":   round(i["quantite"] * i["prix_unitaire"], 2),
-                "Statut":       "Alerte" if en_alerte else "OK",
-                "Date saisie":  i["date_saisie"] or "—",
-            })
+    # ── Application filtres ──
+    terme = recherche.strip().lower()
+    inv_filtres = [
+        i for i in inv
+        if (not terme or terme in i["nom"].lower())
+        and (cat_filter == "Toutes catégories" or i["categorie_nom"] == cat_filter)
+    ]
 
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    show_bar = lieu_filter in ("Tous lieux", "Bar uniquement")
+    show_res = lieu_filter in ("Tous lieux", "Réserve uniquement")
 
-        valeur = sum(i["quantite"] * i["prix_unitaire"] for i in inv)
-        nb_a   = sum(1 for i in inv if i["quantite"] <= i["seuil_alerte"])
+    # ── Groupement par catégorie ──
+    inv_par_cat = {}
+    for i in inv_filtres:
+        key = i["categorie_nom"] or "Sans catégorie"
+        inv_par_cat.setdefault(key, []).append(i)
 
+    if not inv_par_cat:
+        st.markdown(
+            '<div class="zk-cat-empty">Aucune référence ne correspond aux filtres.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        for cat_nom in sorted(inv_par_cat.keys()):
+            items = inv_par_cat[cat_nom]
+            count_label = f'{len(items)} référence{"s" if len(items) > 1 else ""}'
+
+            st.markdown(f'''
+            <div class="zk-cat-bar">
+                <div class="zk-cat-bar-title">{cat_nom}</div>
+                <div class="zk-cat-bar-count">{count_label}</div>
+            </div>
+            ''', unsafe_allow_html=True)
+
+            # En-tête colonnes
+            st.markdown(f'''
+            <div class="zk-inv-head">
+                <div>Référence</div>
+                <div>Format</div>
+                <div>{"Bar" if show_bar else ""}</div>
+                <div>{"Réserve" if show_res else ""}</div>
+                <div>Total</div>
+                <div>Valeur</div>
+                <div></div>
+            </div>
+            ''', unsafe_allow_html=True)
+
+            for p in items:
+                pid = p["produit_id"]
+                qte_total = float(p["qte_total"] or 0)
+                valeur = float(p["valeur"] or 0)
+                seuil = float(p["seuil_alerte"] or 0)
+                en_alerte = qte_total > 0 and qte_total < seuil
+
+                c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 1, 1, 1, 0.7, 0.9, 0.7])
+                with c1:
+                    name_class = "zk-row-name"
+                    label = p["nom"]
+                    if en_alerte:
+                        label = f'{label} <span class="zk-inv-alert-tag">alerte</span>'
+                    st.markdown(f'<div class="{name_class}">{label}</div>', unsafe_allow_html=True)
+                with c2:
+                    st.markdown(f'<div class="zk-row-format">{p["unite"]}</div>', unsafe_allow_html=True)
+                with c3:
+                    if show_bar:
+                        key_bar = f"inv_qte_bar_{rid}_{pid}"
+                        st.number_input(
+                            "bar", min_value=0.0, step=0.5, format="%.1f",
+                            value=float(p["qte_bar"] or 0),
+                            key=key_bar, label_visibility="collapsed",
+                            on_change=_save_qte_callback,
+                            args=(rid, pid, "bar", key_bar),
+                        )
+                    else:
+                        st.markdown(f'<div class="zk-row-format">{p["qte_bar"]:.1f}</div>', unsafe_allow_html=True)
+                with c4:
+                    if show_res:
+                        key_res = f"inv_qte_res_{rid}_{pid}"
+                        st.number_input(
+                            "res", min_value=0.0, step=0.5, format="%.1f",
+                            value=float(p["qte_reserve"] or 0),
+                            key=key_res, label_visibility="collapsed",
+                            on_change=_save_qte_callback,
+                            args=(rid, pid, "reserve", key_res),
+                        )
+                    else:
+                        st.markdown(f'<div class="zk-row-format">{p["qte_reserve"]:.1f}</div>', unsafe_allow_html=True)
+                with c5:
+                    cls = "zk-row-format" + (" zk-inv-alert-num" if en_alerte else "")
+                    st.markdown(f'<div class="{cls}">{qte_total:.1f}</div>', unsafe_allow_html=True)
+                with c6:
+                    val_text = f"{valeur:.2f} €" if valeur > 0 else "—"
+                    st.markdown(f'<div class="zk-row-price">{val_text}</div>', unsafe_allow_html=True)
+                with c7:
+                    if st.button("Fiche", key=f"open_stock_{rid}_{pid}", use_container_width=True):
+                        st.session_state.viewing_stock_pid = pid
+                        st.session_state.viewing_stock_resto = rid
+                        st.rerun()
+
+            st.markdown('<div class="zk-cat-sep"></div>', unsafe_allow_html=True)
+
+    # ── Clôture mensuelle ──
+    section("Clôture mensuelle")
+    today = date.today()
+    mois_default = today.strftime("%Y-%m")
+
+    cc1, cc2, cc3 = st.columns([1, 2, 1])
+    with cc1:
+        mois_input = st.text_input(
+            "Mois à clôturer (YYYY-MM)", value=mois_default,
+            key=f"cloture_mois_{rid}",
+        )
+    with cc2:
+        st.markdown(f'<div class="zk-help-line">Crée un snapshot figé du stock à ce jour pour le mois <b>{mois_input}</b>. Si un snapshot existe déjà pour ce mois, il sera <b>écrasé</b>.</div>', unsafe_allow_html=True)
+    with cc3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("Clôturer le mois", key=f"btn_cloture_{rid}", use_container_width=True):
+            if mois_input and len(mois_input) == 7 and mois_input[4] == "-":
+                snap_id = db.cloturer_inventaire_mois(rid, mois_input)
+                st.success(f"Inventaire {mois_input} clôturé. Visible dans l'historique.")
+                st.rerun()
+            else:
+                st.error("Format attendu : YYYY-MM (exemple : 2026-05).")
+
+
+def render_fiche_stock(resto: dict, produit_id: int):
+    rid = resto["id"]
+    prod = db.get_produit(produit_id)
+    if not prod:
+        st.session_state.pop("viewing_stock_pid", None)
+        st.session_state.pop("viewing_stock_resto", None)
+        st.rerun()
+        return
+
+    if st.button("← Retour à l'inventaire", key="back_inv"):
+        st.session_state.pop("viewing_stock_pid", None)
+        st.session_state.pop("viewing_stock_resto", None)
+        st.rerun()
+
+    page_header(
+        resto["nom"], prod["nom"],
+        f'{prod.get("categorie_nom") or "Sans catégorie"} · {prod["unite"]}',
+    )
+
+    stock = db.get_inventaire_produit(rid, produit_id)
+    qte_total = stock["qte_bar"] + stock["qte_reserve"]
+    prix = float(prod.get("prix_unitaire") or 0)
+    valeur = qte_total * prix
+    seuil = float(prod.get("seuil_alerte") or 0)
+    en_alerte = qte_total > 0 and qte_total < seuil
+
+    # KPIs
+    k1, k2, k3 = st.columns(3)
+    with k1: kpi("Stock total", f"{qte_total:.1f}", f"unité : {prod['unite']}")
+    with k2: kpi("Valeur stock", f"{valeur:.2f} €", f"prix unitaire : {prix:.2f} €", accent="navy")
+    with k3:
+        kpi("État", "Alerte" if en_alerte else "OK",
+            f"seuil : {seuil:.0f}",
+            accent="red" if en_alerte else "success")
+
+    # Saisie par lieu
+    section("Quantité par lieu")
+    with st.form(f"fiche_stock_form_{produit_id}"):
         c1, c2 = st.columns(2)
         with c1:
-            kpi("Valeur du stock", f"{valeur:,.2f} €", "total inventaire")
+            qte_bar_new = st.number_input(
+                "Bar", min_value=0.0, step=0.5, format="%.2f",
+                value=float(stock["qte_bar"]),
+            )
+            note_bar = st.text_input("Note bar (optionnel)", value=stock.get("note_bar", ""))
         with c2:
-            kpi("Alertes actives", str(nb_a),
-                "produits sous seuil",
-                accent="red" if nb_a else "success")
-    else:
-        st.info("Aucun inventaire enregistré pour cet établissement.")
+            qte_res_new = st.number_input(
+                "Réserve", min_value=0.0, step=0.5, format="%.2f",
+                value=float(stock["qte_reserve"]),
+            )
+            note_res = st.text_input("Note réserve (optionnel)", value=stock.get("note_reserve", ""))
 
-    section("Mettre à jour une quantité")
-
-    produits = db.get_produits()
-    prod_options = {f"{p['nom']} ({p['unite']})": p["id"] for p in produits}
-
-    with st.form(f"form_inv_{rid}", clear_on_submit=True):
-        c1, c2, c3 = st.columns([2, 1, 2])
-        with c1: prod_label = st.selectbox("Produit", list(prod_options.keys()))
-        with c2: qty = st.number_input("Quantité", min_value=0.0, step=0.5, format="%.1f")
-        with c3: note = st.text_input("Note (optionnel)")
-        if st.form_submit_button("Enregistrer"):
-            db.upsert_inventaire(rid, prod_options[prod_label], qty, note)
+        if st.form_submit_button("Enregistrer", use_container_width=True):
+            db.set_inventaire_ligne(rid, produit_id, "bar", qte_bar_new, note_bar)
+            db.set_inventaire_ligne(rid, produit_id, "reserve", qte_res_new, note_res)
             st.success("Stock mis à jour.")
             st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  RESTAURANT — HISTORIQUE INVENTAIRE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_resto_historique(resto: dict):
+    rid = resto["id"]
+
+    # Si on visualise le détail d'un mois
+    viewing_snap = st.session_state.get("viewing_snap_id")
+    viewing_resto = st.session_state.get("viewing_snap_resto")
+    if viewing_snap and viewing_resto == rid:
+        render_snapshot_detail(resto, viewing_snap)
+        return
+
+    page_header(resto["type"], "Historique inventaire",
+                "Valorisation et snapshots mensuels figés")
+    render_resto_banner(resto)
+
+    kpis = db.get_kpis_historique_inventaire(rid)
+    var = kpis["variation"]
+
+    # KPIs
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        sub = f'mois {kpis["dernier_mois"]}' if kpis["dernier_mois"] else "aucun snapshot"
+        kpi("Valeur dernier inventaire", f'{kpis["valeur_dernier"]:,.2f} €', sub)
+    with k2:
+        if var is None:
+            kpi("Variation vs M-1", "—", "données insuffisantes", accent="navy")
+        else:
+            signe = "+" if var >= 0 else ""
+            kpi("Variation vs M-1", f"{signe}{var:.1f} %", "valorisation", accent="navy")
+    with k3: kpi("Références inventoriées", str(kpis["nb_refs"]), "dans le dernier")
+    with k4: kpi("Moyenne 3 derniers mois", f'{kpis["moyenne_3m"]:,.2f} €', "valorisation", accent="navy")
+
+    # Liste des snapshots
+    section("Inventaires mensuels")
+    snaps = db.get_inventaires_mensuels(rid)
+
+    if not snaps:
+        st.markdown(
+            '<div class="zk-cat-empty">Aucun inventaire mensuel clôturé pour le moment. Va dans la page Inventaire pour clôturer le mois en cours.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown('''
+    <div class="zk-fiches-head">
+        <div>Mois</div>
+        <div>Date clôture</div>
+        <div>Valeur totale</div>
+        <div>Références</div>
+        <div>Variation</div>
+        <div></div>
+        <div></div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    for idx, s in enumerate(snaps):
+        valeur = float(s["valeur_totale"] or 0)
+        # Variation vs snapshot suivant (M-1)
+        var_pct = None
+        if idx + 1 < len(snaps):
+            prev = float(snaps[idx + 1]["valeur_totale"] or 0)
+            if prev > 0:
+                var_pct = (valeur - prev) / prev * 100
+
+        if var_pct is None:
+            var_text, var_cls = "—", "flat"
+        elif var_pct > 0:
+            var_text, var_cls = f"+{var_pct:.1f} %", "up"
+        elif var_pct < 0:
+            var_text, var_cls = f"{var_pct:.1f} %", "down"
+        else:
+            var_text, var_cls = "0.0 %", "flat"
+
+        c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 1, 1, 1, 0.7, 0.7, 0.8])
+        with c1:
+            st.markdown(f'<div class="zk-prix-name">{s["mois"]}</div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="zk-prix-meta">{s["date_cloture"]}</div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown(f'<div class="zk-prix-evol">{valeur:,.2f} €</div>', unsafe_allow_html=True)
+        with c4:
+            st.markdown(f'<div class="zk-prix-meta">{s["nb_refs"]}</div>', unsafe_allow_html=True)
+        with c5:
+            st.markdown(f'<div class="zk-prix-var {var_cls}">{var_text}</div>', unsafe_allow_html=True)
+        with c6:
+            st.markdown('<div></div>', unsafe_allow_html=True)
+        with c7:
+            if st.button("Détail", key=f"open_snap_{s['id']}", use_container_width=True):
+                st.session_state.viewing_snap_id = s["id"]
+                st.session_state.viewing_snap_resto = rid
+                st.rerun()
+
+
+def render_snapshot_detail(resto: dict, snapshot_id: int):
+    rid = resto["id"]
+
+    # Si on visualise un produit dans le snapshot
+    viewing_snap_pid = st.session_state.get("viewing_snap_pid")
+    if viewing_snap_pid:
+        render_snapshot_produit_detail(resto, snapshot_id, viewing_snap_pid)
+        return
+
+    snap = db.get_inventaire_mensuel(snapshot_id)
+    if not snap:
+        st.session_state.pop("viewing_snap_id", None)
+        st.session_state.pop("viewing_snap_resto", None)
+        st.rerun()
+        return
+
+    if st.button("← Retour à l'historique", key="back_hist"):
+        st.session_state.pop("viewing_snap_id", None)
+        st.session_state.pop("viewing_snap_resto", None)
+        st.session_state.pop("viewing_snap_pid", None)
+        st.rerun()
+
+    page_header(
+        f"Inventaire {snap['mois']}",
+        f"Snapshot du {snap['date_cloture']}",
+        f'{resto["nom"]} · {resto["type"]}',
+    )
+
+    valeur = float(snap["valeur_totale"] or 0)
+    nb_refs = int(snap["nb_refs"] or 0)
+
+    k1, k2, k3 = st.columns(3)
+    with k1: kpi("Valeur totale", f"{valeur:,.2f} €", "prix figés au jour de clôture")
+    with k2: kpi("Références", str(nb_refs), "produits inventoriés", accent="navy")
+    with k3: kpi("Date de clôture", snap["date_cloture"], accent="navy")
+
+    section("Détail par référence")
+    lignes = db.get_snapshot_lignes(snapshot_id)
+
+    if not lignes:
+        st.markdown(
+            '<div class="zk-cat-empty">Aucune ligne dans ce snapshot.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    # Groupement par catégorie
+    par_cat = {}
+    for l in lignes:
+        par_cat.setdefault(l["categorie_nom"] or "Sans catégorie", []).append(l)
+
+    for cat_nom in sorted(par_cat.keys()):
+        items = par_cat[cat_nom]
+        count_label = f'{len(items)} référence{"s" if len(items) > 1 else ""}'
+        st.markdown(f'''
+        <div class="zk-cat-bar">
+            <div class="zk-cat-bar-title">{cat_nom}</div>
+            <div class="zk-cat-bar-count">{count_label}</div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        st.markdown('''
+        <div class="zk-inv-snap-head">
+            <div>Référence</div>
+            <div>Format</div>
+            <div>Bar</div>
+            <div>Réserve</div>
+            <div>Total</div>
+            <div>Prix figé</div>
+            <div>Valeur</div>
+            <div></div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        for l in items:
+            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 0.8, 0.6, 0.6, 0.6, 0.7, 0.8, 0.7])
+            with c1:
+                st.markdown(f'<div class="zk-row-name">{l["produit_nom"]}</div>', unsafe_allow_html=True)
+            with c2:
+                st.markdown(f'<div class="zk-row-format">{l["unite"]}</div>', unsafe_allow_html=True)
+            with c3:
+                st.markdown(f'<div class="zk-row-format">{l["qte_bar"]:.1f}</div>', unsafe_allow_html=True)
+            with c4:
+                st.markdown(f'<div class="zk-row-format">{l["qte_reserve"]:.1f}</div>', unsafe_allow_html=True)
+            with c5:
+                st.markdown(f'<div class="zk-prix-evol">{l["qte_total"]:.1f}</div>', unsafe_allow_html=True)
+            with c6:
+                st.markdown(f'<div class="zk-row-format">{l["prix_snapshot"]:.2f} €</div>', unsafe_allow_html=True)
+            with c7:
+                st.markdown(f'<div class="zk-row-price">{l["valeur"]:.2f} €</div>', unsafe_allow_html=True)
+            with c8:
+                if st.button("Détail", key=f"open_snap_p_{snapshot_id}_{l['produit_id']}", use_container_width=True):
+                    st.session_state.viewing_snap_pid = l["produit_id"]
+                    st.rerun()
+        st.markdown('<div class="zk-cat-sep"></div>', unsafe_allow_html=True)
+
+
+def render_snapshot_produit_detail(resto: dict, snapshot_id: int, produit_id: int):
+    snap = db.get_inventaire_mensuel(snapshot_id)
+    prod = db.get_produit(produit_id)
+    if not snap or not prod:
+        st.session_state.pop("viewing_snap_pid", None)
+        st.rerun()
+        return
+
+    if st.button("← Retour au détail du mois", key="back_snap_detail"):
+        st.session_state.pop("viewing_snap_pid", None)
+        st.rerun()
+
+    page_header(
+        f"Inventaire {snap['mois']}",
+        prod["nom"],
+        f'{prod.get("categorie_nom") or "Sans catégorie"} · {prod["unite"]} · {resto["nom"]}',
+    )
+
+    detail = db.get_snapshot_produit(snapshot_id, produit_id)
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1: kpi("Quantité bar", f'{detail["qte_bar"]:.1f}', f"unité : {prod['unite']}")
+    with k2: kpi("Quantité réserve", f'{detail["qte_reserve"]:.1f}', f"unité : {prod['unite']}", accent="navy")
+    with k3: kpi("Total", f'{detail["qte_total"]:.1f}', "tous lieux", accent="navy")
+    with k4: kpi("Valeur figée", f'{detail["valeur"]:.2f} €', f'prix : {detail["prix_snapshot"]:.2f} €', accent="navy")
+
+    section("Contexte")
+    st.markdown(
+        f'<div class="zk-help-line">Ce détail est <b>figé</b> à la date de clôture du {snap["date_cloture"]}. '
+        f'Le prix unitaire courant peut être différent (modifications postérieures dans le catalogue).</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2442,6 +2903,7 @@ def route(page: str):
             sub = page[len(key) + 1:]
             if sub == "dashboard":  return render_resto_dashboard(r)
             if sub == "inventaire": return render_resto_inventaire(r)
+            if sub == "historique": return render_resto_historique(r)
             if sub == "mouvements": return render_resto_mouvements(r)
             if sub == "ventes":     return render_resto_ventes(r)
             if sub == "fiches":     return render_resto_fiches(r)
