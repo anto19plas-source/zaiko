@@ -1264,6 +1264,11 @@ def render_groupe_catalogue():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_groupe_prix():
+    viewing_id = st.session_state.get("viewing_price_product_id")
+    if viewing_id:
+        _render_fiche_prix(viewing_id)
+        return
+
     page_header("Groupe WAC", "Évolution des prix",
                 "Suivi des variations tarifaires par référence")
 
@@ -1278,76 +1283,184 @@ def render_groupe_prix():
         )
         return
 
-    nb_changements = len(changements)
-    derniere_date = max(h["date_changement"] for h in changements)
-    variations = [
-        ((h["nouveau_prix"] - h["ancien_prix"]) / h["ancien_prix"] * 100)
-        for h in changements if h["ancien_prix"]
-    ]
-    var_moyenne = sum(variations) / len(variations) if variations else 0
+    # Agréger par produit (sur les vrais changements uniquement)
+    produits_map: dict = {}
+    for h in changements:
+        pid = h["produit_id"]
+        if pid not in produits_map:
+            produits_map[pid] = {
+                "id": pid,
+                "nom": h["produit_nom"],
+                "categorie": h["categorie_nom"] or "Sans catégorie",
+                "unite": h["unite"],
+                "changements": [],
+            }
+        produits_map[pid]["changements"].append(h)
 
-    k1, k2, k3 = st.columns(3)
-    with k1: kpi("Changements de prix", str(nb_changements), "depuis la mise en service")
-    with k2: kpi("Dernière modification", derniere_date, accent="navy")
-    with k3:
+    for data in produits_map.values():
+        chrono = sorted(data["changements"], key=lambda h: h["date_changement"])
+        data["prix_initial"] = float(chrono[0]["ancien_prix"])
+        data["prix_actuel"] = float(chrono[-1]["nouveau_prix"])
+        data["nb_changements"] = len(chrono)
+        data["derniere_date"] = chrono[-1]["date_changement"]
+        if data["prix_initial"] > 0:
+            data["variation_totale"] = (data["prix_actuel"] - data["prix_initial"]) / data["prix_initial"] * 100
+        else:
+            data["variation_totale"] = 0.0
+
+    # Tri par défaut : dernière modification (plus récent en haut)
+    produits_list = sorted(produits_map.values(), key=lambda x: x["derniere_date"], reverse=True)
+
+    # 4 KPIs
+    refs_concernees = len(produits_map)
+    total_changements = len(changements)
+    derniere_date = produits_list[0]["derniere_date"] if produits_list else "—"
+    variations_totales = [d["variation_totale"] for d in produits_list if d["prix_initial"] > 0]
+    var_moyenne = sum(variations_totales) / len(variations_totales) if variations_totales else 0.0
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1: kpi("Références concernées", str(refs_concernees), "ayant changé de prix")
+    with k2: kpi("Total des changements", str(total_changements), "depuis la mise en service")
+    with k3: kpi("Dernière modification", derniere_date, accent="navy")
+    with k4:
         signe = "+" if var_moyenne >= 0 else ""
-        kpi("Variation moyenne", f"{signe}{var_moyenne:.1f} %",
-            "moyenne pondérée sur l'ensemble", accent="navy")
+        kpi("Variation moyenne", f"{signe}{var_moyenne:.1f} %", "sur toutes les références", accent="navy")
 
-    section("Filtrer par référence")
-    produits_avec_histo = sorted(
-        {(h["produit_id"], h["produit_nom"], h["unite"], h["categorie_nom"] or "Sans catégorie")
-         for h in historique},
-        key=lambda x: (x[3], x[1])
-    )
-    options = {"Toutes les références": None}
-    for pid, pnom, punite, pcat in produits_avec_histo:
-        options[f"{pnom} — {pcat} — {punite}"] = pid
+    # Filtres
+    cats_dispos = sorted({d["categorie"] for d in produits_list})
+    f1, f2 = st.columns([2, 1])
+    with f1:
+        recherche = st.text_input(
+            "Rechercher une référence",
+            placeholder="Rechercher une référence…",
+            label_visibility="collapsed",
+            key="prix_search",
+        )
+    with f2:
+        cat_filter = st.selectbox(
+            "Catégorie",
+            ["Toutes catégories"] + cats_dispos,
+            label_visibility="collapsed",
+            key="prix_cat_filter",
+        )
 
-    choix = st.selectbox(
-        "Référence",
-        list(options.keys()),
-        label_visibility="collapsed",
-    )
-    produit_id = options[choix]
+    terme = recherche.strip().lower()
+    produits_filtres = [
+        d for d in produits_list
+        if (not terme or terme in d["nom"].lower())
+        and (cat_filter == "Toutes catégories" or d["categorie"] == cat_filter)
+    ]
 
-    if produit_id:
-        histo_prod = db.get_historique_prix(produit_id=produit_id)
-        histo_prod_chrono = sorted(histo_prod, key=lambda h: h["date_changement"])
-
-        if len(histo_prod_chrono) >= 1:
-            section(f"Courbe d'évolution — {choix}")
-            dates = [h["date_changement"] for h in histo_prod_chrono]
-            prix = [h["nouveau_prix"] for h in histo_prod_chrono]
-
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=dates, y=prix,
-                mode="lines+markers",
-                line=dict(color=NAVY, width=2.5, shape="hv"),
-                marker=dict(color=GOLD, size=9, line=dict(color=NAVY, width=1.5)),
-                hovertemplate="%{x}<br>%{y:.2f} €<extra></extra>",
-            ))
-            plotly_layout(fig, height=320)
-            fig.update_yaxes(title=None, tickprefix="", ticksuffix=" €")
-            fig.update_xaxes(title=None)
-            st.plotly_chart(fig, use_container_width=True)
-
-        section("Historique des changements")
-        rows = [h for h in histo_prod if float(h["ancien_prix"]) != float(h["nouveau_prix"])]
-    else:
-        section("Derniers changements")
-        rows = changements[:30]
-
-    if not rows:
+    if not produits_filtres:
         st.markdown(
-            '<div class="zk-cat-empty">Aucun changement de prix pour cette référence.</div>',
+            '<div class="zk-cat-empty">Aucune référence ne correspond aux filtres.</div>',
             unsafe_allow_html=True,
         )
         return
 
+    # En-tête du tableau
+    st.markdown('''
+    <div class="zk-prix-head">
+        <div>Référence</div>
+        <div>Catégorie · Format</div>
+        <div>Évolution</div>
+        <div>Variation</div>
+        <div>Modifs</div>
+        <div>Dernière modif</div>
+        <div></div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # Lignes du tableau (mix HTML + bouton Streamlit)
+    for d in produits_filtres:
+        var = d["variation_totale"]
+        if var > 0:
+            cls, signe_var = "up", "+"
+        elif var < 0:
+            cls, signe_var = "down", ""
+        else:
+            cls, signe_var = "flat", ""
+
+        c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 1.5, 1.5, 0.8, 0.6, 0.9, 0.8])
+        with c1:
+            st.markdown(f'<div class="zk-prix-name">{d["nom"]}</div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="zk-prix-meta">{d["categorie"]} · {d["unite"]}</div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown(
+                f'<div class="zk-prix-evol">{d["prix_initial"]:.2f} € → {d["prix_actuel"]:.2f} €</div>',
+                unsafe_allow_html=True,
+            )
+        with c4:
+            st.markdown(
+                f'<div class="zk-prix-var {cls}">{signe_var}{var:.1f} %</div>',
+                unsafe_allow_html=True,
+            )
+        with c5:
+            st.markdown(f'<div class="zk-prix-meta">{d["nb_changements"]}</div>', unsafe_allow_html=True)
+        with c6:
+            st.markdown(f'<div class="zk-prix-meta">{d["derniere_date"]}</div>', unsafe_allow_html=True)
+        with c7:
+            if st.button("Détail", key=f"prix_detail_{d['id']}", use_container_width=True):
+                st.session_state.viewing_price_product_id = d["id"]
+                st.rerun()
+
+
+def _render_fiche_prix(produit_id: int):
+    if st.button("← Retour à l'évolution des prix", key="back_to_prix"):
+        st.session_state.pop("viewing_price_product_id", None)
+        st.rerun()
+
+    historique = db.get_historique_prix(produit_id=produit_id)
+    if not historique:
+        st.warning("Aucune donnée pour cette référence.")
+        return
+
+    histo_chrono = sorted(historique, key=lambda h: h["date_changement"])
+    prod_nom = histo_chrono[0]["produit_nom"]
+    categorie = histo_chrono[0]["categorie_nom"] or "Sans catégorie"
+    unite = histo_chrono[0]["unite"]
+
+    page_header("Évolution des prix", prod_nom, f"{categorie} · {unite}")
+
+    changements = [h for h in histo_chrono if float(h["ancien_prix"]) != float(h["nouveau_prix"])]
+
+    prix_initial = float(histo_chrono[0]["ancien_prix"])
+    prix_actuel = float(histo_chrono[-1]["nouveau_prix"])
+    nb_changements = len(changements)
+    if prix_initial > 0:
+        variation_totale = (prix_actuel - prix_initial) / prix_initial * 100
+    else:
+        variation_totale = 0.0
+
+    signe = "+" if variation_totale >= 0 else ""
+    k1, k2, k3, k4 = st.columns(4)
+    with k1: kpi("Prix initial", f"{prix_initial:.2f} €", "point d'ancrage")
+    with k2: kpi("Prix actuel", f"{prix_actuel:.2f} €", "tarif en vigueur")
+    with k3: kpi("Variation totale", f"{signe}{variation_totale:.1f} %", "depuis le début", accent="navy")
+    with k4: kpi("Changements", str(nb_changements), "enregistrés")
+
+    # Courbe Plotly (tous les points de l'historique, y compris ancrage initial)
+    dates = [h["date_changement"] for h in histo_chrono]
+    prix_vals = [float(h["nouveau_prix"]) for h in histo_chrono]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=dates, y=prix_vals,
+        mode="lines+markers",
+        line=dict(color=NAVY, width=2.5, shape="hv"),
+        marker=dict(color=GOLD, size=9, line=dict(color=NAVY, width=1.5)),
+        hovertemplate="%{x}<br>%{y:.2f} €<extra></extra>",
+    ))
+    plotly_layout(fig, height=320)
+    fig.update_yaxes(title=None, ticksuffix=" €")
+    fig.update_xaxes(title=None)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Détail chronologique
+    section("Historique détaillé")
     lignes_html = []
-    for h in rows:
+    for h in histo_chrono:
         ancien = float(h["ancien_prix"])
         nouveau = float(h["nouveau_prix"])
         if ancien == 0:
@@ -1355,35 +1468,25 @@ def render_groupe_prix():
         else:
             var_pct = (nouveau - ancien) / ancien * 100
         if var_pct > 0:
-            cls = "up"
-            signe = "+"
+            cls, signe_var = "up", "+"
         elif var_pct < 0:
-            cls = "down"
-            signe = ""
+            cls, signe_var = "down", ""
         else:
-            cls = "flat"
-            signe = ""
+            cls, signe_var = "flat", ""
         lignes_html.append(f'''
-            <div class="zk-price-row">
-                <div class="zk-price-date">{h["date_changement"]}</div>
-                <div>
-                    <div class="zk-price-prod">{h["produit_nom"]}</div>
-                    <div class="zk-price-prod-meta">{(h["categorie_nom"] or "Sans catégorie")} · {h["unite"]}</div>
-                </div>
-                <div class="zk-price-evol">
-                    {ancien:.2f} €<span class="zk-price-evol-arrow">→</span>{nouveau:.2f} €
-                </div>
-                <div class="zk-price-var {cls}">{signe}{var_pct:.1f} %</div>
+            <div class="zk-fiche-price-row">
+                <div>{h["date_changement"]}</div>
+                <div class="zk-prix-evol">{ancien:.2f} € → {nouveau:.2f} €</div>
+                <div class="zk-prix-var {cls}">{signe_var}{var_pct:.1f} %</div>
             </div>
         ''')
 
     st.markdown(f'''
-    <div class="zk-price-block">
-        <div class="zk-price-head">
+    <div class="zk-fiche-price-block">
+        <div class="zk-fiche-price-head">
             <div>Date</div>
-            <div>Référence</div>
             <div>Évolution</div>
-            <div style="text-align:right;">Variation</div>
+            <div>Variation</div>
         </div>
         {"".join(lignes_html)}
     </div>
