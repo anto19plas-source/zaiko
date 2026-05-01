@@ -79,7 +79,7 @@ FORMATS_PREDEFINIS = [
 # ─── Logo SVG (inline, adapté au fond navy) ─────────────────────────────────
 
 LOGO_NAV_SVG = """
-<svg width="22" height="24" viewBox="0 0 122 132" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<svg width="34" height="37" viewBox="0 0 122 132" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <rect x="10"  y="14"  width="100" height="18" rx="2" fill="#F4EFE6"></rect>
   <rect x="14"  y="14"  width="92"  height="4"        fill="#C9A24B" opacity="0.95"></rect>
   <rect x="62"  y="40"  width="34"  height="14" rx="2" fill="#F4EFE6" opacity="0.45"></rect>
@@ -156,7 +156,7 @@ def inject_css():
 
     /* ── Main container padding (compense la navbar fixe) ── */
     .main .block-container {
-        padding-top:   84px !important;
+        padding-top:   102px !important;
         padding-left:  40px !important;
         padding-right: 40px !important;
         padding-bottom: 64px !important;
@@ -170,45 +170,45 @@ def inject_css():
         position: fixed;
         top: 0; left: 0; right: 0;
         z-index: 99999;
-        height: 60px;
+        height: 76px;
         background: var(--zk-navy-deep);
         display: flex;
         align-items: center;
-        padding: 0 28px;
-        border-bottom: 1px solid rgba(201, 162, 75, 0.10);
-        box-shadow: 0 1px 0 rgba(0,0,0,.2), 0 4px 16px rgba(0,0,0,.18);
+        padding: 0 36px;
+        border-bottom: 1px solid rgba(201, 162, 75, 0.18);
+        box-shadow: 0 1px 0 rgba(0,0,0,.25), 0 6px 24px rgba(0,0,0,.22);
     }
 
     .zk-brand {
         display: flex;
         align-items: center;
-        gap: 9px;
+        gap: 12px;
         text-decoration: none !important;
-        margin-right: 28px;
+        margin-right: 36px;
         flex-shrink: 0;
-        height: 60px;
+        height: 76px;
         padding: 0 4px;
     }
     .zk-brand:hover { text-decoration: none !important; }
     .zk-brand-text {
         font-family: var(--zk-font-sans);
-        font-size: 17px;
+        font-size: 20px;
         font-weight: 600;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.025em;
         color: var(--zk-bone);
         line-height: 1;
     }
 
     .zk-sep {
         width: 1px;
-        height: 18px;
-        background: rgba(244, 239, 230, .08);
+        height: 22px;
+        background: rgba(244, 239, 230, .10);
         flex-shrink: 0;
     }
 
     .zk-group {
         position: relative;
-        height: 60px;
+        height: 76px;
         display: flex;
         align-items: center;
     }
@@ -256,7 +256,7 @@ def inject_css():
 
     .zk-dropdown {
         position: absolute;
-        top: 54px;
+        top: 68px;
         left: 0;
         background: var(--zk-navy-deep);
         border: 1px solid rgba(201, 162, 75, .18);
@@ -865,6 +865,133 @@ def inject_css():
     }
     .zk-fiche-price-row:last-child { border-bottom: none; }
     .zk-fiche-price-row:hover { background: var(--zk-paper); }
+
+    /* ═══════════════════════════════════════
+       PAGE D'ACCUEIL
+    ═══════════════════════════════════════ */
+    .zk-hero {
+        background: var(--zk-navy-deep);
+        border-radius: 18px;
+        padding: 72px 40px 64px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        margin-bottom: 44px;
+        border: 1px solid rgba(201, 162, 75, 0.14);
+        box-shadow: 0 8px 40px -8px rgba(8, 26, 47, .35);
+    }
+    .zk-hero-logo { margin-bottom: 32px; }
+    .zk-hero-quote {
+        font-family: var(--zk-font-serif);
+        font-style: italic;
+        font-weight: 400;
+        font-size: 26px;
+        line-height: 1.35;
+        letter-spacing: -0.015em;
+        color: rgba(244, 239, 230, 0.60);
+        max-width: 480px;
+        margin: 0;
+    }
+
+    .zk-home-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 12px;
+    }
+    .zk-home-card {
+        background: white;
+        border: 1px solid var(--zk-rule);
+        border-radius: 12px;
+        padding: 22px 20px 20px 24px;
+        text-decoration: none !important;
+        display: block;
+        transition: box-shadow .15s, transform .12s;
+        position: relative;
+        overflow: hidden;
+    }
+    .zk-home-card:hover {
+        box-shadow: 0 6px 20px -4px rgba(8, 26, 47, .12);
+        transform: translateY(-2px);
+        text-decoration: none !important;
+    }
+    .zk-home-card-accent {
+        position: absolute;
+        top: 0; left: 0; bottom: 0;
+        width: 4px;
+        border-radius: 12px 0 0 12px;
+    }
+    .zk-home-card-name {
+        font-family: var(--zk-font-sans);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--zk-ink);
+        margin-bottom: 4px;
+        letter-spacing: -0.01em;
+    }
+    .zk-home-card-type {
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+        margin-bottom: 18px;
+    }
+    .zk-home-card-cta {
+        font-family: var(--zk-font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+    }
+
+    .zk-home-access-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+    .zk-home-access {
+        background: var(--zk-navy);
+        border: 1px solid var(--zk-navy-soft);
+        border-radius: 10px;
+        padding: 20px 22px;
+        text-decoration: none !important;
+        display: block;
+        transition: background .14s;
+    }
+    .zk-home-access:hover {
+        background: var(--zk-navy-soft);
+        text-decoration: none !important;
+    }
+    .zk-home-access-eyebrow {
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--zk-muted-dark);
+        margin-bottom: 6px;
+    }
+    .zk-home-access-name {
+        font-family: var(--zk-font-sans);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--zk-bone);
+        letter-spacing: -0.01em;
+    }
+
+    /* ═══════════════════════════════════════
+       CATALOGUE — séparateurs entre catégories
+    ═══════════════════════════════════════ */
+    .zk-cat-sep {
+        height: 1px;
+        background: var(--zk-rule);
+        margin: 2px 0 28px 0;
+        border-radius: 1px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -914,7 +1041,7 @@ def render_navbar(current_page: str):
     resto_html = "".join(resto_blocks)
 
     nav_html = f'''<div class="zk-nav">
-        <a class="zk-brand" href="?page=groupe_dashboard" target="_self">
+        <a class="zk-brand" href="?page=accueil" target="_self">
             {LOGO_NAV_SVG.strip()}
             <span class="zk-brand-text">Zaiko</span>
         </a>
@@ -989,6 +1116,59 @@ def plotly_layout(fig, height=None):
     if height:
         fig.update_layout(height=height)
     return fig
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ACCUEIL
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_accueil():
+    # ── Hero navy-deep avec logo grand format + baseline ──
+    logo_hero_svg = '''<svg width="310" height="114" viewBox="0 0 360 132" xmlns="http://www.w3.org/2000/svg" aria-label="Zaiko">
+      <g>
+        <rect x="10"  y="14"  width="100" height="18" rx="2" fill="#F4EFE6"></rect>
+        <rect x="14"  y="14"  width="92"  height="4"        fill="#C9A24B" opacity="0.95"></rect>
+        <rect x="62"  y="40"  width="34"  height="14" rx="2" fill="#F4EFE6" opacity="0.45"></rect>
+        <rect x="46"  y="60"  width="34"  height="14" rx="2" fill="#F4EFE6" opacity="0.6"></rect>
+        <rect x="30"  y="80"  width="34"  height="14" rx="2" fill="#B23A2A" opacity="0.95"></rect>
+        <rect x="10"  y="100" width="100" height="18" rx="2" fill="#F4EFE6"></rect>
+        <rect x="14"  y="114" width="92"  height="4"        fill="#C9A24B" opacity="0.95"></rect>
+      </g>
+      <text x="146" y="92" font-family="Inter,system-ui,sans-serif" font-weight="600"
+            font-size="84" letter-spacing="-3.4" fill="#F4EFE6">Zaiko</text>
+    </svg>'''
+
+    st.markdown(f'''
+    <div class="zk-hero">
+        <div class="zk-hero-logo">{logo_hero_svg}</div>
+        <p class="zk-hero-quote">Le stock bouge. Zaiko s'adapte.</p>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # ── Établissements ──
+    section("Établissements")
+    cards_html = "".join(f'''
+        <a class="zk-home-card" href="?page={r["key"]}_dashboard" target="_self">
+            <div class="zk-home-card-accent" style="background:{r["accent"]}"></div>
+            <div class="zk-home-card-name">{r["nom"]}</div>
+            <div class="zk-home-card-type">{r["type"]}</div>
+            <div class="zk-home-card-cta">Accéder</div>
+        </a>''' for r in RESTAURANTS)
+    st.markdown(f'<div class="zk-home-grid">{cards_html}</div>', unsafe_allow_html=True)
+
+    # ── Outils Groupe WAC ──
+    section("Outils Groupe WAC")
+    access_items = [
+        ("groupe_catalogue", "Catalogue produits"),
+        ("groupe_prix",      "Évolution des prix"),
+        ("groupe_fiches",    "Fiches techniques"),
+    ]
+    access_html = "".join(f'''
+        <a class="zk-home-access" href="?page={pid}" target="_self">
+            <div class="zk-home-access-eyebrow">Groupe WAC</div>
+            <div class="zk-home-access-name">{label}</div>
+        </a>''' for pid, label in access_items)
+    st.markdown(f'<div class="zk-home-access-grid">{access_html}</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1226,6 +1406,7 @@ def render_groupe_catalogue():
                         if st.button("Ouvrir", key=f"open_prod_{p['id']}", use_container_width=True):
                             st.session_state.editing_product_id = p["id"]
                             st.rerun()
+                st.markdown('<div class="zk-cat-sep"></div>', unsafe_allow_html=True)
         else:
             st.markdown(
                 '<div class="zk-cat-empty">Aucune référence ne correspond aux filtres.</div>',
@@ -1813,6 +1994,7 @@ def render_resto_ventes(resto: dict):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def route(page: str):
+    if page == "accueil":          return render_accueil()
     if page == "groupe_dashboard": return render_groupe_dashboard()
     if page == "groupe_catalogue": return render_groupe_catalogue()
     if page == "groupe_prix":      return render_groupe_prix()
@@ -1827,7 +2009,7 @@ def route(page: str):
             if sub == "mouvements": return render_resto_mouvements(r)
             if sub == "ventes":     return render_resto_ventes(r)
 
-    render_groupe_dashboard()
+    render_accueil()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1837,7 +2019,7 @@ def route(page: str):
 def main():
     db.init_db()
     inject_css()
-    current = st.query_params.get("page", "groupe_dashboard")
+    current = st.query_params.get("page", "accueil")
     render_navbar(current)
     route(current)
 
