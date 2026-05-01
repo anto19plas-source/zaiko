@@ -38,7 +38,6 @@ GROUPE_NAV = [
     ("groupe_dashboard", "Dashboard"),
     ("groupe_catalogue", "Catalogue"),
     ("groupe_prix",      "Évolution des prix"),
-    ("groupe_fiches",    "Fiches techniques"),
 ]
 
 RESTO_NAV = [
@@ -46,6 +45,7 @@ RESTO_NAV = [
     ("inventaire",  "Inventaire"),
     ("mouvements",  "Mouvements"),
     ("ventes",      "Ventes & Ratios"),
+    ("fiches",      "Fiches techniques"),
 ]
 
 TYPE_MV_COLORS = {
@@ -992,6 +992,44 @@ def inject_css():
         margin: 2px 0 28px 0;
         border-radius: 1px;
     }
+
+    /* ═══════════════════════════════════════
+       FICHES TECHNIQUES — en-têtes de tableau
+    ═══════════════════════════════════════ */
+    .zk-fiches-head {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr 0.7fr 0.7fr 0.8fr;
+        gap: 14px;
+        padding: 12px 18px;
+        background: var(--zk-paper);
+        border: 1px solid var(--zk-rule);
+        border-radius: 10px 10px 0 0;
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+        margin-top: 12px;
+        margin-bottom: 4px;
+    }
+    .zk-fiches-ing-head {
+        display: grid;
+        grid-template-columns: 3fr 0.8fr 0.8fr 0.9fr 0.7fr;
+        gap: 14px;
+        padding: 12px 18px;
+        background: var(--zk-paper);
+        border: 1px solid var(--zk-rule);
+        border-radius: 10px 10px 0 0;
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+        margin-top: 12px;
+        margin-bottom: 4px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1116,6 +1154,99 @@ def plotly_layout(fig, height=None):
     if height:
         fig.update_layout(height=height)
     return fig
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  FICHES TECHNIQUES — helpers de calcul
+# ═══════════════════════════════════════════════════════════════════════════════
+
+UNITES_RECETTE = ["cl", "L", "g", "kg", "pièce"]
+
+
+def parse_unite_catalogue(unite: str) -> tuple[float, str]:
+    """
+    Convertit l'unité catalogue (ex: '75cl', '1.5L', '500g', '1kg', 'bouteille')
+    en (quantité_normalisée, dimension) où dimension ∈ {'cl', 'g', 'piece'}.
+    Pour 'bouteille', 'pièce', 'lot', 'carton', 'douzaine', 'barquette' → (1, 'piece').
+    """
+    if not unite:
+        return (1.0, "piece")
+    u = unite.strip().lower().replace(",", ".")
+
+    if u.endswith("cl"):
+        try:
+            return (float(u[:-2]), "cl")
+        except ValueError:
+            pass
+    if u.endswith("kg"):
+        try:
+            return (float(u[:-2]) * 1000.0, "g")
+        except ValueError:
+            pass
+    if u.endswith("l"):
+        try:
+            return (float(u[:-1]) * 100.0, "cl")
+        except ValueError:
+            pass
+    if u.endswith("g"):
+        try:
+            return (float(u[:-1]), "g")
+        except ValueError:
+            pass
+    return (1.0, "piece")
+
+
+def normaliser_qte_recette(qte: float, unite_recette: str) -> tuple[float, str]:
+    """Ramène la quantité recette dans la dimension de base (cl, g, ou piece)."""
+    u = (unite_recette or "").strip()
+    if u == "cl":   return (qte, "cl")
+    if u == "L":    return (qte * 100.0, "cl")
+    if u == "g":    return (qte, "g")
+    if u == "kg":   return (qte * 1000.0, "g")
+    return (qte, "piece")
+
+
+def cout_ingredient(produit: dict, qte: float, unite_recette: str) -> float | None:
+    """
+    Coût d'un ingrédient (€). Retourne None si la dimension recette est
+    incompatible avec le format catalogue (ex: 'g' pour un produit en cl).
+    """
+    if not produit:
+        return None
+    prix = float(produit.get("prix_unitaire") or 0)
+    if prix <= 0 or qte <= 0:
+        return 0.0
+    cat_qte, cat_dim = parse_unite_catalogue(produit.get("unite") or produit.get("produit_unite") or "")
+    rec_qte, rec_dim = normaliser_qte_recette(qte, unite_recette)
+    if cat_dim != rec_dim:
+        return None
+    if cat_qte <= 0:
+        return 0.0
+    return prix * rec_qte / cat_qte
+
+
+def calculer_indicateurs_fiche(ingredients: list, prix_vente_ttc: float, tva: float) -> dict:
+    """Renvoie coût brut, coût avec 10% perte, prix HT, ratio, coefficient."""
+    cout_brut = 0.0
+    for ing in ingredients:
+        prod = ing.get("_produit")
+        if not prod:
+            continue
+        c = cout_ingredient(prod, float(ing.get("quantite") or 0), ing.get("unite_recette") or "pièce")
+        if c is not None:
+            cout_brut += c
+
+    cout_perte = cout_brut * 1.10
+    prix_ht = (prix_vente_ttc / (1.0 + tva / 100.0)) if (prix_vente_ttc and tva is not None) else 0.0
+    ratio = (cout_perte / prix_ht * 100.0) if prix_ht > 0 else 0.0
+    coeff = (prix_ht / cout_perte) if cout_perte > 0 else 0.0
+    return {
+        "cout_brut": cout_brut,
+        "cout_perte": cout_perte,
+        "prix_ht": prix_ht,
+        "ratio": ratio,
+        "coefficient": coeff,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1990,6 +2121,311 @@ def render_resto_ventes(resto: dict):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  RESTAURANT — FICHES TECHNIQUES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_resto_fiches(resto: dict):
+    if st.session_state.get("editing_fiche_resto") == resto["id"]:
+        render_fiche_editor(resto)
+        return
+
+    page_header(resto["type"], "Fiches techniques",
+                "Recettes, coût matière, ratio et coefficient")
+    render_resto_banner(resto)
+
+    produits_all = db.get_produits()
+    produits_map = {p["id"]: p for p in produits_all}
+
+    for type_fiche, label_titre, label_btn in [
+        ("cocktail", "Cocktails", "Nouvelle fiche cocktail"),
+        ("plat",     "Plats",     "Nouvelle fiche plat"),
+    ]:
+        section(label_titre)
+        fiches = db.get_fiches(resto["id"], type_filter=type_fiche)
+
+        if fiches:
+            st.markdown('''
+            <div class="zk-fiches-head">
+                <div>Fiche</div>
+                <div>Coût matière</div>
+                <div>Coût + 10% perte</div>
+                <div>Prix vente TTC</div>
+                <div>Ratio</div>
+                <div>Coefficient</div>
+                <div></div>
+            </div>
+            ''', unsafe_allow_html=True)
+
+            for f in fiches:
+                ings_db = db.get_fiche_ingredients(f["id"])
+                ingredients = [
+                    {**i, "_produit": produits_map.get(i["produit_id"])}
+                    for i in ings_db
+                ]
+                ind = calculer_indicateurs_fiche(
+                    ingredients, float(f["prix_vente_ttc"] or 0), float(f["tva"] or 0)
+                )
+
+                c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 1, 1, 1, 0.7, 0.7, 0.8])
+                with c1:
+                    st.markdown(f'<div class="zk-prix-name">{f["nom"]}</div>', unsafe_allow_html=True)
+                with c2:
+                    st.markdown(f'<div class="zk-prix-evol">{ind["cout_brut"]:.2f} €</div>', unsafe_allow_html=True)
+                with c3:
+                    st.markdown(f'<div class="zk-prix-evol">{ind["cout_perte"]:.2f} €</div>', unsafe_allow_html=True)
+                with c4:
+                    pv = float(f["prix_vente_ttc"] or 0)
+                    pv_text = f"{pv:.2f} €" if pv > 0 else "—"
+                    st.markdown(f'<div class="zk-prix-evol">{pv_text}</div>', unsafe_allow_html=True)
+                with c5:
+                    ratio_text = f'{ind["ratio"]:.1f} %' if ind["ratio"] > 0 else "—"
+                    st.markdown(f'<div class="zk-prix-evol">{ratio_text}</div>', unsafe_allow_html=True)
+                with c6:
+                    coeff_text = f'×{ind["coefficient"]:.2f}' if ind["coefficient"] > 0 else "—"
+                    st.markdown(f'<div class="zk-prix-evol">{coeff_text}</div>', unsafe_allow_html=True)
+                with c7:
+                    if st.button("Ouvrir", key=f"open_fiche_{f['id']}", use_container_width=True):
+                        st.session_state.editing_fiche_id = f["id"]
+                        st.session_state.editing_fiche_resto = resto["id"]
+                        st.rerun()
+            st.markdown('<div class="zk-cat-sep"></div>', unsafe_allow_html=True)
+        else:
+            st.markdown(
+                f'<div class="zk-cat-empty">Aucune fiche {label_titre.lower()} pour le moment.</div>',
+                unsafe_allow_html=True,
+            )
+
+        if st.button(label_btn, key=f"new_fiche_{type_fiche}_{resto['id']}"):
+            st.session_state.editing_fiche_id = "new"
+            st.session_state.editing_fiche_type = type_fiche
+            st.session_state.editing_fiche_resto = resto["id"]
+            st.rerun()
+
+
+def render_fiche_editor(resto: dict):
+    fiche_id = st.session_state.editing_fiche_id
+    is_new = (fiche_id == "new")
+
+    draft_key = f"fiche_draft_{fiche_id}_{resto['id']}"
+    if draft_key not in st.session_state:
+        if is_new:
+            type_fiche = st.session_state.get("editing_fiche_type", "cocktail")
+            tva_default = 20.0 if type_fiche == "cocktail" else 10.0
+            st.session_state[draft_key] = {
+                "id": None, "type": type_fiche, "nom": "",
+                "prix_vente_ttc": 0.0, "tva": tva_default, "notes": "",
+                "ingredients": [], "_next_uid": 1,
+            }
+        else:
+            f = db.get_fiche(fiche_id)
+            ings = db.get_fiche_ingredients(fiche_id)
+            st.session_state[draft_key] = {
+                "id": f["id"], "type": f["type"], "nom": f["nom"],
+                "prix_vente_ttc": float(f["prix_vente_ttc"] or 0),
+                "tva": float(f["tva"] or 20),
+                "notes": f["notes"] or "",
+                "ingredients": [
+                    {"_uid": k+1, "produit_id": i["produit_id"],
+                     "quantite": float(i["quantite"]),
+                     "unite_recette": i["unite_recette"]}
+                    for k, i in enumerate(ings)
+                ],
+                "_next_uid": len(ings) + 1,
+            }
+
+    draft = st.session_state[draft_key]
+
+    if st.button("← Retour aux fiches techniques", key="back_fiches"):
+        st.session_state.pop("editing_fiche_id", None)
+        st.session_state.pop("editing_fiche_type", None)
+        st.session_state.pop("editing_fiche_resto", None)
+        st.session_state.pop(draft_key, None)
+        st.rerun()
+
+    type_label = "Fiche cocktail" if draft["type"] == "cocktail" else "Fiche plat"
+    title = draft["nom"] if draft["nom"] else f"Nouvelle {type_label.lower()}"
+    page_header(type_label, title, f'{resto["nom"]} · {resto["type"]}')
+
+    # ── Informations générales ──
+    section("Informations générales")
+    c1, c2, c3 = st.columns([2, 1, 1])
+    with c1:
+        nom = st.text_input("Nom de la fiche *", value=draft["nom"], key=f"nom_{draft_key}")
+    with c2:
+        prix_v = st.number_input("Prix de vente TTC (€)", min_value=0.0, step=0.5,
+                                 value=float(draft["prix_vente_ttc"]), format="%.2f",
+                                 key=f"pv_{draft_key}")
+    with c3:
+        tva = st.number_input("TVA (%)", min_value=0.0, step=1.0,
+                              value=float(draft["tva"]), format="%.1f",
+                              key=f"tva_{draft_key}")
+    notes = st.text_area("Notes", value=draft["notes"], height=70, key=f"notes_{draft_key}")
+    draft["nom"] = nom.strip()
+    draft["prix_vente_ttc"] = float(prix_v)
+    draft["tva"] = float(tva)
+    draft["notes"] = notes.strip()
+
+    # ── Ingrédients ──
+    section("Ingrédients")
+
+    produits = db.get_produits()
+    produits_map = {p["id"]: p for p in produits}
+    placeholder = "— Choisir une référence —"
+    options = [placeholder] + [
+        f'{p["nom"]} ({p["categorie_nom"] or "Sans catégorie"} · {p["unite"]})'
+        for p in produits
+    ]
+    pid_by_label = {options[k+1]: produits[k]["id"] for k in range(len(produits))}
+    label_by_pid = {produits[k]["id"]: options[k+1] for k in range(len(produits))}
+
+    if draft["ingredients"]:
+        st.markdown('''
+        <div class="zk-fiches-ing-head">
+            <div>Référence</div>
+            <div>Quantité</div>
+            <div>Unité</div>
+            <div>Coût</div>
+            <div></div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        to_remove = None
+        for ing in draft["ingredients"]:
+            uid = ing["_uid"]
+            c1, c2, c3, c4, c5 = st.columns([3, 0.8, 0.8, 0.9, 0.7])
+
+            current_label = label_by_pid.get(ing["produit_id"], placeholder) if ing["produit_id"] else placeholder
+            idx = options.index(current_label) if current_label in options else 0
+
+            with c1:
+                new_label = st.selectbox(
+                    "ref", options, index=idx,
+                    key=f"ing_prod_{draft_key}_{uid}",
+                    label_visibility="collapsed",
+                )
+                ing["produit_id"] = pid_by_label.get(new_label) if new_label != placeholder else None
+
+            with c2:
+                ing["quantite"] = float(st.number_input(
+                    "qte", min_value=0.0, step=0.5,
+                    value=float(ing["quantite"] or 0), format="%.2f",
+                    key=f"ing_qte_{draft_key}_{uid}",
+                    label_visibility="collapsed",
+                ))
+
+            with c3:
+                u_idx = UNITES_RECETTE.index(ing["unite_recette"]) if ing["unite_recette"] in UNITES_RECETTE else 0
+                ing["unite_recette"] = st.selectbox(
+                    "u", UNITES_RECETTE, index=u_idx,
+                    key=f"ing_unite_{draft_key}_{uid}",
+                    label_visibility="collapsed",
+                )
+
+            with c4:
+                prod = produits_map.get(ing["produit_id"])
+                cout = cout_ingredient(prod, ing["quantite"], ing["unite_recette"]) if prod else None
+                if cout is None:
+                    st.markdown('<div class="zk-prix-meta">unité incompatible</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="zk-prix-evol">{cout:.2f} €</div>', unsafe_allow_html=True)
+
+            with c5:
+                if st.button("Retirer", key=f"ing_rm_{draft_key}_{uid}", use_container_width=True):
+                    to_remove = uid
+
+        if to_remove is not None:
+            draft["ingredients"] = [i for i in draft["ingredients"] if i["_uid"] != to_remove]
+            st.rerun()
+    else:
+        st.markdown(
+            '<div class="zk-cat-empty">Aucun ingrédient. Clique sur « Ajouter un ingrédient ».</div>',
+            unsafe_allow_html=True,
+        )
+
+    if st.button("Ajouter un ingrédient", key=f"ing_add_{draft_key}"):
+        default_unite = "cl" if draft["type"] == "cocktail" else "g"
+        draft["ingredients"].append({
+            "_uid": draft["_next_uid"],
+            "produit_id": None,
+            "quantite": 0.0,
+            "unite_recette": default_unite,
+        })
+        draft["_next_uid"] += 1
+        st.rerun()
+
+    # ── Indicateurs ──
+    section("Indicateurs")
+    ingredients_enriched = [
+        {**ing, "_produit": produits_map.get(ing["produit_id"])}
+        for ing in draft["ingredients"]
+    ]
+    ind = calculer_indicateurs_fiche(ingredients_enriched, draft["prix_vente_ttc"], draft["tva"])
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1:
+        kpi("Coût matière", f'{ind["cout_brut"]:.2f} €', "brut, sans perte")
+    with k2:
+        kpi("Coût + 10% perte", f'{ind["cout_perte"]:.2f} €', "réaliste", accent="navy")
+    with k3:
+        kpi("Prix HT", f'{ind["prix_ht"]:.2f} €', f'TVA {draft["tva"]:.0f}%', accent="navy")
+    with k4:
+        ratio_text = f'{ind["ratio"]:.1f} %' if ind["ratio"] > 0 else "—"
+        kpi("Ratio matière", ratio_text, "sur coût + 10% perte")
+    with k5:
+        coeff_text = f'×{ind["coefficient"]:.2f}' if ind["coefficient"] > 0 else "—"
+        kpi("Coefficient", coeff_text, "Prix HT / coût")
+
+    # ── Enregistrement ──
+    section("Enregistrement")
+    s1, s2 = st.columns(2)
+    with s1:
+        if st.button("Enregistrer la fiche", use_container_width=True, key=f"save_{draft_key}"):
+            if not draft["nom"]:
+                st.error("Le nom de la fiche est requis.")
+            else:
+                payload = [
+                    {"produit_id": i["produit_id"],
+                     "quantite": i["quantite"],
+                     "unite_recette": i["unite_recette"]}
+                    for i in draft["ingredients"]
+                    if i.get("produit_id")
+                ]
+                if is_new:
+                    new_id = db.create_fiche(
+                        resto["id"], draft["type"], draft["nom"],
+                        draft["prix_vente_ttc"], draft["tva"], draft["notes"],
+                    )
+                    db.replace_fiche_ingredients(new_id, payload)
+                    new_draft_key = f"fiche_draft_{new_id}_{resto['id']}"
+                    st.session_state[new_draft_key] = {**draft, "id": new_id}
+                    st.session_state.pop(draft_key, None)
+                    st.session_state.editing_fiche_id = new_id
+                    st.success("Fiche créée.")
+                    st.rerun()
+                else:
+                    db.update_fiche(
+                        draft["id"], draft["nom"],
+                        draft["prix_vente_ttc"], draft["tva"], draft["notes"],
+                    )
+                    db.replace_fiche_ingredients(draft["id"], payload)
+                    st.success("Fiche enregistrée.")
+                    st.rerun()
+    with s2:
+        if not is_new:
+            confirm = st.checkbox("Confirmer la suppression", key=f"confirm_del_{draft_key}")
+            if st.button("Supprimer la fiche", use_container_width=True, key=f"del_{draft_key}"):
+                if confirm:
+                    db.delete_fiche(draft["id"])
+                    st.session_state.pop("editing_fiche_id", None)
+                    st.session_state.pop("editing_fiche_resto", None)
+                    st.session_state.pop(draft_key, None)
+                    st.success("Fiche supprimée.")
+                    st.rerun()
+                else:
+                    st.error("Coche « Confirmer la suppression » avant de supprimer.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  ROUTING
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2008,6 +2444,7 @@ def route(page: str):
             if sub == "inventaire": return render_resto_inventaire(r)
             if sub == "mouvements": return render_resto_mouvements(r)
             if sub == "ventes":     return render_resto_ventes(r)
+            if sub == "fiches":     return render_resto_fiches(r)
 
     render_accueil()
 

@@ -82,6 +82,27 @@ def init_db():
             nouveau_prix      REAL,
             date_changement   TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS fiches_techniques (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            restaurant_id   INTEGER NOT NULL REFERENCES restaurants(id),
+            type            TEXT NOT NULL,
+            nom             TEXT NOT NULL,
+            prix_vente_ttc  REAL DEFAULT 0,
+            tva             REAL DEFAULT 20,
+            notes           TEXT DEFAULT '',
+            created_at      TEXT DEFAULT (datetime('now')),
+            updated_at      TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS fiche_ingredients (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            fiche_id        INTEGER NOT NULL REFERENCES fiches_techniques(id) ON DELETE CASCADE,
+            produit_id      INTEGER NOT NULL REFERENCES produits(id),
+            quantite        REAL NOT NULL,
+            unite_recette   TEXT NOT NULL,
+            ordre           INTEGER DEFAULT 0
+        );
     """)
 
     if not c.execute("SELECT 1 FROM restaurants LIMIT 1").fetchone():
@@ -400,3 +421,95 @@ def get_historique_prix(produit_id=None, limit=None):
     rows = conn.execute(q, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ─── Fiches techniques ───────────────────────────────────────────────────────
+
+def get_fiches(restaurant_id, type_filter=None):
+    conn = get_connection()
+    q = "SELECT * FROM fiches_techniques WHERE restaurant_id = ?"
+    params = [restaurant_id]
+    if type_filter:
+        q += " AND type = ?"
+        params.append(type_filter)
+    q += " ORDER BY nom"
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_fiche(fiche_id):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM fiches_techniques WHERE id = ?",
+        (fiche_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_fiche_ingredients(fiche_id):
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT fi.*, p.nom AS produit_nom, p.unite AS produit_unite,
+               p.prix_unitaire, c.nom AS categorie_nom
+        FROM fiche_ingredients fi
+        JOIN produits p ON fi.produit_id = p.id
+        LEFT JOIN categories c ON p.categorie_id = c.id
+        WHERE fi.fiche_id = ?
+        ORDER BY fi.ordre, fi.id
+    """, (fiche_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def create_fiche(restaurant_id, type_fiche, nom, prix_vente_ttc, tva, notes):
+    conn = get_connection()
+    cur = conn.execute(
+        """INSERT INTO fiches_techniques
+           (restaurant_id, type, nom, prix_vente_ttc, tva, notes, created_at, updated_at)
+           VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))""",
+        (restaurant_id, type_fiche, nom, prix_vente_ttc, tva, notes)
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return new_id
+
+
+def update_fiche(fiche_id, nom, prix_vente_ttc, tva, notes):
+    conn = get_connection()
+    conn.execute(
+        """UPDATE fiches_techniques
+           SET nom = ?, prix_vente_ttc = ?, tva = ?, notes = ?, updated_at = datetime('now')
+           WHERE id = ?""",
+        (nom, prix_vente_ttc, tva, notes, fiche_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_fiche(fiche_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM fiche_ingredients WHERE fiche_id = ?", (fiche_id,))
+    conn.execute("DELETE FROM fiches_techniques WHERE id = ?", (fiche_id,))
+    conn.commit()
+    conn.close()
+
+
+def replace_fiche_ingredients(fiche_id, ingredients):
+    """ingredients: list of dicts {produit_id, quantite, unite_recette}"""
+    conn = get_connection()
+    conn.execute("DELETE FROM fiche_ingredients WHERE fiche_id = ?", (fiche_id,))
+    for ordre, ing in enumerate(ingredients):
+        if ing.get("produit_id") is None:
+            continue
+        conn.execute(
+            """INSERT INTO fiche_ingredients
+               (fiche_id, produit_id, quantite, unite_recette, ordre)
+               VALUES (?,?,?,?,?)""",
+            (fiche_id, ing["produit_id"], float(ing.get("quantite", 0) or 0),
+             ing.get("unite_recette", "pièce"), ordre)
+        )
+    conn.commit()
+    conn.close()
