@@ -57,10 +57,23 @@ TYPE_MV_COLORS = {
 
 FORMATS_PREDEFINIS = [
     "bouteille",
-    "10cl", "20cl", "25cl", "33cl", "37.5cl", "48.5cl", "50cl", "70cl", "75cl",
-    "1L", "1.5L", "2L", "3L", "5L", "10L", "20L", "30L",
-    "100g", "150g", "250g", "500g", "750g", "1kg", "2kg", "5kg", "10kg",
-    "pièce", "lot", "carton",
+    # Centilitres — mesures bar et petits formats
+    "1cl", "2cl", "3cl", "4cl", "5cl", "6cl", "8cl",
+    "10cl", "12cl", "15cl", "18cl", "20cl", "25cl",
+    # Centilitres — standards boissons
+    "33cl", "35cl", "37.5cl", "40cl", "44cl", "48.5cl", "50cl",
+    "60cl", "66cl", "70cl", "75cl",
+    # Magnums et grandes contenances
+    "100cl", "150cl",
+    # Litres
+    "1L", "1.25L", "1.5L", "2L", "3L", "5L",
+    # Fûts
+    "10L", "15L", "20L", "25L", "30L", "50L",
+    # Solides
+    "100g", "150g", "200g", "250g", "500g", "750g",
+    "1kg", "1.5kg", "2kg", "3kg", "5kg", "10kg",
+    # Génériques
+    "pièce", "lot", "carton", "douzaine", "barquette",
 ]
 
 # ─── Logo SVG (inline, adapté au fond navy) ─────────────────────────────────
@@ -702,6 +715,156 @@ def inject_css():
     .zk-price-var.up   { color: var(--zk-red); }
     .zk-price-var.down { color: var(--zk-success); }
     .zk-price-var.flat { color: var(--zk-muted); }
+
+    /* ═══════════════════════════════════════
+       CATALOGUE — barre catégorie + lignes interactives
+    ═══════════════════════════════════════ */
+    .zk-cat-bar {
+        background: var(--zk-navy);
+        border-radius: 10px 10px 0 0;
+        padding: 14px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-top: 18px;
+        border-bottom: 2px solid var(--zk-gold);
+    }
+    .zk-cat-bar-title {
+        font-family: var(--zk-font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--zk-gold);
+    }
+    .zk-cat-bar-count {
+        font-family: var(--zk-font-mono);
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--zk-muted-dark);
+    }
+    .zk-row-name {
+        font-family: var(--zk-font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--zk-ink);
+        padding: 6px 0;
+        line-height: 1.4;
+    }
+    .zk-row-format {
+        font-family: var(--zk-font-mono);
+        font-size: 12px;
+        color: var(--zk-muted);
+        padding: 6px 0;
+        line-height: 1.4;
+    }
+    .zk-row-price {
+        font-family: var(--zk-font-mono);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--zk-gold-deep);
+        text-align: right;
+        padding: 6px 0;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.4;
+    }
+    .zk-row-price.zk-no-price {
+        color: var(--zk-red);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-size: 11px;
+    }
+
+    /* ═══════════════════════════════════════
+       ÉVOLUTION DES PRIX — résumé par produit
+    ═══════════════════════════════════════ */
+    .zk-prix-head {
+        display: grid;
+        grid-template-columns: 2fr 1.5fr 1.5fr 0.8fr 0.6fr 0.9fr 0.8fr;
+        gap: 14px;
+        padding: 12px 18px;
+        background: var(--zk-paper);
+        border: 1px solid var(--zk-rule);
+        border-radius: 10px 10px 0 0;
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+        margin-top: 12px;
+        margin-bottom: 4px;
+    }
+    .zk-prix-name {
+        font-family: var(--zk-font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--zk-ink);
+        padding: 6px 0;
+        line-height: 1.4;
+    }
+    .zk-prix-meta {
+        font-family: var(--zk-font-mono);
+        font-size: 12px;
+        color: var(--zk-muted);
+        padding: 6px 0;
+        line-height: 1.4;
+    }
+    .zk-prix-evol {
+        font-family: var(--zk-font-mono);
+        font-size: 13px;
+        color: var(--zk-ink);
+        font-variant-numeric: tabular-nums;
+        padding: 6px 0;
+        line-height: 1.4;
+    }
+    .zk-prix-var {
+        font-family: var(--zk-font-mono);
+        font-size: 13px;
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+        padding: 6px 0;
+        line-height: 1.4;
+    }
+    .zk-prix-var.up   { color: var(--zk-red); }
+    .zk-prix-var.down { color: var(--zk-success); }
+    .zk-prix-var.flat { color: var(--zk-muted); }
+
+    /* ═══════════════════════════════════════
+       FICHE PRIX — historique chronologique 3 colonnes
+    ═══════════════════════════════════════ */
+    .zk-fiche-price-block {
+        background: white;
+        border: 1px solid var(--zk-rule);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+    .zk-fiche-price-head {
+        display: grid;
+        grid-template-columns: 140px 1fr 120px;
+        gap: 16px;
+        padding: 14px 22px;
+        background: var(--zk-paper);
+        border-bottom: 1px solid var(--zk-rule);
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+    }
+    .zk-fiche-price-row {
+        display: grid;
+        grid-template-columns: 140px 1fr 120px;
+        gap: 16px;
+        align-items: center;
+        padding: 14px 22px;
+        border-bottom: 1px solid var(--zk-rule);
+    }
+    .zk-fiche-price-row:last-child { border-bottom: none; }
+    .zk-fiche-price-row:hover { background: var(--zk-paper); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -886,12 +1049,110 @@ def render_groupe_dashboard():
 #  GROUPE WAC — CATALOGUE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def render_fiche_produit(prod, cats, cat_labels):
+    if st.button("← Retour au catalogue", key="back_to_catalogue"):
+        st.session_state.pop("editing_product_id", None)
+        st.rerun()
+
+    page_header(
+        "Fiche produit",
+        prod["nom"],
+        f'{prod.get("categorie_nom") or "Sans catégorie"} · {prod["unite"]}',
+    )
+
+    section("Modifier la référence")
+
+    with st.form("fiche_edit_form"):
+        e1, e2, e3 = st.columns([2, 1, 1])
+        with e1:
+            nom_edit = st.text_input("Nom de la référence *", value=prod["nom"])
+        with e2:
+            cat_index = cat_labels.index(prod["categorie_nom"]) if prod.get("categorie_nom") in cat_labels else 0
+            cat_edit = st.selectbox("Catégorie *", cat_labels, index=cat_index)
+        with e3:
+            fmt_index = FORMATS_PREDEFINIS.index(prod["unite"]) if prod["unite"] in FORMATS_PREDEFINIS else 0
+            fmt_edit = st.selectbox("Conditionnement *", FORMATS_PREDEFINIS, index=fmt_index)
+
+        e4, e5 = st.columns([1, 2])
+        with e4:
+            prix_edit = st.number_input(
+                "Prix unitaire (€)",
+                min_value=0.0, step=0.5, format="%.2f",
+                value=float(prod["prix_unitaire"] or 0.0),
+            )
+        with e5:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            confirm_delete = st.checkbox("Confirmer la suppression de cette référence")
+
+        b1, b2 = st.columns(2)
+        with b1:
+            save_btn = st.form_submit_button("Valider les modifications", use_container_width=True)
+        with b2:
+            delete_btn = st.form_submit_button("Supprimer la référence", use_container_width=True)
+
+        if save_btn:
+            if nom_edit.strip():
+                cid_edit = cats[cat_labels.index(cat_edit)]["id"]
+                db.update_produit(prod["id"], nom_edit.strip(), cid_edit, fmt_edit, prix_edit)
+                st.session_state.pop("editing_product_id", None)
+                st.success("Modifications enregistrées.")
+                st.rerun()
+            else:
+                st.error("Le nom de la référence est requis.")
+        elif delete_btn:
+            if confirm_delete:
+                db.archive_produit(prod["id"])
+                st.session_state.pop("editing_product_id", None)
+                st.success("Référence supprimée.")
+                st.rerun()
+            else:
+                st.error("Coche « Confirmer la suppression » avant de supprimer.")
+
+    histo = db.get_historique_prix(produit_id=prod["id"])
+    histo_chrono = sorted(histo, key=lambda h: h["date_changement"])
+    changes = [h for h in histo_chrono if float(h["ancien_prix"]) != float(h["nouveau_prix"])]
+
+    if changes:
+        section("Historique des prix de cette référence")
+
+        dates = [h["date_changement"] for h in histo_chrono]
+        prix = [h["nouveau_prix"] for h in histo_chrono]
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=dates, y=prix,
+            mode="lines+markers",
+            line=dict(color=NAVY, width=2.5, shape="hv"),
+            marker=dict(color=GOLD, size=9, line=dict(color=NAVY, width=1.5)),
+            hovertemplate="%{x}<br>%{y:.2f} €<extra></extra>",
+        ))
+        plotly_layout(fig, height=280)
+        fig.update_yaxes(title=None, ticksuffix=" €")
+        fig.update_xaxes(title=None)
+        st.plotly_chart(fig, use_container_width=True)
+
+        if st.button("Voir le détail complet de l'évolution des prix", key="goto_prix_from_fiche"):
+            st.session_state.viewing_price_product_id = prod["id"]
+            st.session_state.pop("editing_product_id", None)
+            st.query_params["page"] = "groupe_prix"
+            st.rerun()
+
+
 def render_groupe_catalogue():
+    cats = db.get_categories()
+    cat_labels = [c["nom"] for c in cats]
+    produits = db.get_produits()
+
+    editing_id = st.session_state.get("editing_product_id")
+    if editing_id:
+        prod = next((p for p in produits if p["id"] == editing_id), None)
+        if prod:
+            render_fiche_produit(prod, cats, cat_labels)
+            return
+        st.session_state.pop("editing_product_id", None)
+
     page_header("Groupe WAC", "Catalogue produits",
                 "Référentiel commun à tous les établissements")
-
-    cats = db.get_categories()
-    produits = db.get_produits()
 
     if not produits:
         st.markdown(
@@ -908,18 +1169,21 @@ def render_groupe_catalogue():
                 "Rechercher une référence",
                 placeholder="Rechercher une référence…",
                 label_visibility="collapsed",
+                key="cat_search",
             )
         with f2:
             cat_filter = st.selectbox(
                 "Catégorie",
                 ["Toutes catégories"] + cats_dispos,
                 label_visibility="collapsed",
+                key="cat_filter",
             )
         with f3:
             fmt_filter = st.selectbox(
                 "Conditionnement",
                 ["Tous conditionnements"] + formats_dispos,
                 label_visibility="collapsed",
+                key="fmt_filter",
             )
 
         terme = recherche.strip().lower()
@@ -938,94 +1202,35 @@ def render_groupe_catalogue():
         if produits_par_cat:
             for cat_nom in sorted(produits_par_cat.keys()):
                 items = produits_par_cat[cat_nom]
-                def _price_html(p):
-                    if not p["prix_unitaire"] or float(p["prix_unitaire"]) == 0:
-                        return '<div class="zk-prod-price zk-no-price">prix à définir</div>'
-                    return f'<div class="zk-prod-price">{p["prix_unitaire"]:.2f} €</div>'
-                lignes_html = "".join(
-                    f'''<div class="zk-prod-line">
-                        <div class="zk-prod-name">{p["nom"]}</div>
-                        <div class="zk-prod-format">{p["unite"]}</div>
-                        {_price_html(p)}
-                    </div>'''
-                    for p in items
-                )
                 count_label = f'{len(items)} référence{"s" if len(items) > 1 else ""}'
+
                 st.markdown(f'''
-                <div class="zk-cat-block">
-                    <div class="zk-cat-header">
-                        <div class="zk-cat-title">{cat_nom}</div>
-                        <div class="zk-cat-count">{count_label}</div>
-                    </div>
-                    {lignes_html}
+                <div class="zk-cat-bar">
+                    <div class="zk-cat-bar-title">{cat_nom}</div>
+                    <div class="zk-cat-bar-count">{count_label}</div>
                 </div>
                 ''', unsafe_allow_html=True)
+
+                for p in items:
+                    c1, c2, c3, c4 = st.columns([3, 1, 1, 0.8])
+                    with c1:
+                        st.markdown(f'<div class="zk-row-name">{p["nom"]}</div>', unsafe_allow_html=True)
+                    with c2:
+                        st.markdown(f'<div class="zk-row-format">{p["unite"]}</div>', unsafe_allow_html=True)
+                    with c3:
+                        if not p["prix_unitaire"] or float(p["prix_unitaire"]) == 0:
+                            st.markdown('<div class="zk-row-price zk-no-price">prix à définir</div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div class="zk-row-price">{p["prix_unitaire"]:.2f} €</div>', unsafe_allow_html=True)
+                    with c4:
+                        if st.button("Ouvrir", key=f"open_prod_{p['id']}", use_container_width=True):
+                            st.session_state.editing_product_id = p["id"]
+                            st.rerun()
         else:
             st.markdown(
                 '<div class="zk-cat-empty">Aucune référence ne correspond aux filtres.</div>',
                 unsafe_allow_html=True,
             )
-
-    cat_labels = [c["nom"] for c in cats]
-
-    if produits:
-        section("Modifier une référence")
-        prod_options = {
-            f'{p["nom"]} — {p["categorie_nom"] or "Sans catégorie"} — {p["unite"]}': p["id"]
-            for p in sorted(produits, key=lambda x: (x["categorie_nom"] or "", x["nom"]))
-        }
-        prod_label = st.selectbox(
-            "Référence à modifier",
-            list(prod_options.keys()),
-            key="edit_prod_select",
-        )
-        prod_id = prod_options[prod_label]
-        prod_actuel = next(p for p in produits if p["id"] == prod_id)
-
-        with st.form("form_edit_prod"):
-            e1, e2, e3 = st.columns([2, 1, 1])
-            with e1:
-                nom_edit = st.text_input("Nom de la référence *", value=prod_actuel["nom"])
-            with e2:
-                cat_index = cat_labels.index(prod_actuel["categorie_nom"]) if prod_actuel["categorie_nom"] in cat_labels else 0
-                cat_edit = st.selectbox("Catégorie *", cat_labels, index=cat_index)
-            with e3:
-                fmt_index = FORMATS_PREDEFINIS.index(prod_actuel["unite"]) if prod_actuel["unite"] in FORMATS_PREDEFINIS else 0
-                fmt_edit = st.selectbox("Conditionnement *", FORMATS_PREDEFINIS, index=fmt_index)
-
-            e4, e5, e6 = st.columns([2, 1, 1])
-            with e4:
-                prix_edit = st.number_input(
-                    "Prix unitaire (€)",
-                    min_value=0.0, step=0.5, format="%.2f",
-                    value=float(prod_actuel["prix_unitaire"] or 0.0),
-                )
-            with e5:
-                confirm_delete = st.checkbox("Confirmer la suppression")
-            with e6:
-                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-
-            b1, b2 = st.columns(2)
-            with b1:
-                save_btn = st.form_submit_button("Enregistrer les modifications", use_container_width=True)
-            with b2:
-                delete_btn = st.form_submit_button("Supprimer la référence", use_container_width=True)
-
-            if save_btn:
-                if nom_edit.strip():
-                    cid_edit = cats[cat_labels.index(cat_edit)]["id"]
-                    db.update_produit(prod_id, nom_edit.strip(), cid_edit, fmt_edit, prix_edit)
-                    st.success("Modifications enregistrées.")
-                    st.rerun()
-                else:
-                    st.error("Le nom de la référence est requis.")
-            elif delete_btn:
-                if confirm_delete:
-                    db.archive_produit(prod_id)
-                    st.success("Référence supprimée.")
-                    st.rerun()
-                else:
-                    st.error("Coche « Confirmer la suppression » avant de supprimer.")
 
     section("Ajouter un produit")
     with st.form("form_add_prod", clear_on_submit=True):
