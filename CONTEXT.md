@@ -3,6 +3,8 @@
 > Ce document résume l'état actuel du projet Zaiko.
 > À donner à une nouvelle session Claude pour reprendre proprement.
 
+*Dernière mise à jour : 2 mai 2026 — fin de session « refonte inventaires + DA renforcée + audit bugs ».*
+
 ---
 
 ## 1. Projet
@@ -19,6 +21,7 @@
 - Déploiement : **Streamlit Community Cloud** depuis `anto19plas-source/zaiko` (public)
 
 **Compte GitHub** : `anto19plas-source` · `gh` CLI authentifié.
+**Repo** : https://github.com/anto19plas-source/zaiko
 
 ---
 
@@ -26,13 +29,13 @@
 
 ```
 /Users/plasantonin/Desktop/CODE ZAIKO/
-├── app.py                  # App Streamlit (~1300 lignes, toutes les pages)
-├── database.py             # Couche SQLite + seed (~370 lignes)
+├── app.py                  # App Streamlit (~3000 lignes, toutes les pages)
+├── database.py             # Couche SQLite + seed (~870 lignes)
 ├── seed_data.py            # Catalogue WAC réel : 33 catégories + 729 produits
 ├── base prix wac .xlsx     # Source Excel du catalogue (gitignored, local only)
 ├── requirements.txt        # streamlit, pandas, plotly
 ├── .streamlit/config.toml  # Thème Streamlit aligné brand
-├── .gitignore              # ignore zaiko.db, base prix wac .xlsx, __pycache__, .env, .DS_Store
+├── .gitignore
 ├── handoff/                # ASSETS BRAND OFFICIELS — référence absolue
 │   ├── BRAND.md            # Spec brand complète (palette, typo, voix)
 │   ├── tokens.css / tokens.ts
@@ -44,47 +47,24 @@
 
 ---
 
-## 3. Charte graphique — règles strictes
+## 3. Charte graphique — règles strictes (rappel)
 
-**Palette officielle (à utiliser EXACTEMENT) :**
+**Palette officielle :** Ink `#0B1220` · Navy `#0F2A4A` · Navy deep `#081A2F` · Navy soft `#1B3558` · Gold `#C9A24B` · Gold light `#E3C275` · Gold deep `#A8862F` · Red `#B23A2A` · Bone `#F4EFE6` · Paper `#FAF7F1` · Rule `#E2D9C7` · Muted `#54688A` · Success `#2A6F4F`.
 
-| Token | Hex | Rôle |
-|---|---|---|
-| Ink | `#0B1220` | Texte principal |
-| Navy | `#0F2A4A` | Surface primaire |
-| Navy deep | `#081A2F` | Profondeur, dark mode |
-| Navy soft | `#1B3558` | Tracks, surfaces 2nd |
-| Gold | `#C9A24B` | Accent principal |
-| Gold light | `#E3C275` | Hover |
-| Gold deep | `#A8862F` | Pressed |
-| Red | `#B23A2A` | Alerte |
-| Red deep | `#8C2A1E` | Pressed danger |
-| Bone | `#F4EFE6` | Texte sur sombre |
-| Paper | `#FAF7F1` | Fond clair |
-| Rule | `#E2D9C7` | Filets, borders |
-| Muted | `#54688A` | Texte secondaire light |
-| Muted dark | `#9FB2CF` | Texte secondaire dark |
-| Success | `#2A6F4F` | États positifs |
-
-**Ratio cible 60/30/8/2 :** 60% Navy/Ink · 30% Paper/Bone · 8% Gold (rare) · 2% Red (alerte uniquement).
+**Ratio cible 60/30/8/2** : 60% Navy/Ink · 30% Paper/Bone · 8% Gold (rare) · 2% Red (alerte uniquement).
 
 **Règles strictes :**
-- Le doré n'est JAMAIS en aplat dominant
-- Le rouge ne touche JAMAIS le doré (séparer par navy ou paper)
-- Pas de gradients flashy
-- **Aucun emoji** — couleurs d'accent uniquement
+- Doré jamais en aplat dominant
+- Rouge ne touche jamais le doré
+- Pas de gradients flashy (sauf le radial subtil de l'app icon)
+- **Aucun emoji** — couleurs et formes uniquement
+- **Wordmark Inter 700** (et non 600), letter-spacing -0.04em
+- Métaphore visuelle : barres horizontales empilées = niveaux de stock
 
 **Typographie :**
-
-| Famille | Usage |
-|---|---|
-| **Inter** | UI, wordmark "Zaiko", labels, boutons |
-| **Fraunces** | Display, citations italiques uniquement |
-| **JetBrains Mono** | Données, eyebrows, métriques, codes |
-
-- Wordmark **"Zaiko" en Inter 600** (PAS Fraunces)
-- Eyebrows en JetBrains Mono **uppercase tracking 0.28em**
-- Citations en Fraunces italique
+- **Inter** — UI, wordmark, labels, boutons
+- **Fraunces** — display, citations italiques uniquement
+- **JetBrains Mono** — données, eyebrows uppercase tracking 0.28em, métriques
 
 ---
 
@@ -99,39 +79,70 @@
 
 ---
 
-## 5. Architecture de navigation
+## 5. Architecture de navigation (à jour)
 
-**Top navbar fixe** (pas de sidebar) avec dropdowns CSS au survol :
-
+**Navbar fixe** (76px de haut, brand → accueil) avec dropdowns :
 ```
 ZAIKO | Groupe WAC ▾ | Chéri Chéri ▾ | Chéri Guapito ▾ | Chéri Guapo ▾ | Les Halles ▾
 ```
 
-**Dropdown Groupe WAC :** Dashboard · Catalogue · **Évolution des prix** · Fiches techniques
+**Dropdown Groupe WAC :** Dashboard · Catalogue · Évolution des prix
+*(Fiches techniques retiré — code conservé, route `?page=groupe_fiches` accessible mais cachée)*
 
-**Dropdown chaque restaurant (×4) :** Dashboard · Inventaire · Mouvements · Ventes & Ratios
+**Dropdown chaque restaurant (×4) :** Dashboard · Inventaire · Historique inventaire · Ventes & Ratios · Fiches techniques
+*(Mouvements retiré — code conservé, route `?page={key}_mouvements` accessible mais cachée)*
 
-**Routing :** `st.query_params["page"]`, format `?page={key}_{section}` ou `?page=groupe_{section}`.
+**Routing :** `st.query_params["page"]`. Page par défaut = `accueil`. Format `?page={key}_{section}` ou `?page=groupe_{section}`.
+
+Au changement de page, `_cleanup_state_on_nav()` purge automatiquement les états résidentiels (`viewing_*`, `editing_*`).
 
 ---
 
 ## 6. État actuel des modules
 
-### Page Groupe WAC
+### Page d'accueil (`?page=accueil`, défaut)
+- **Hero block navy-deep** avec motif barres en filigrane gold (métaphore niveaux de stock), eyebrow `Groupe WAC · 4 établissements`, logo Zaiko grand format (Inter 700), filet gold, baseline `« Le stock bouge. Zaiko s'adapte. »` en Fraunces italic 30px.
+- **4 cartes restaurants** : eyebrow `Établissement N`, mini-pictogramme barres en couleur d'accent, nom Inter 700 17px, type en mono, CTA `Accéder →`.
+- **3 accès rapides Groupe WAC** : Catalogue · Prix · Vue consolidée — fond navy, flèche gold animée au hover.
+- **Footer brand** minimal : wordmark + filet + baseline italic.
+
+### Groupe WAC
 
 #### Dashboard
 KPIs · tableau résumé restos · chart CA consolidé 30j. **Stable.**
 
 #### Catalogue (refondu, version interactive)
-- **Barre de filtres** en haut : recherche texte (nom) · catégorie · conditionnement, options dynamiques basées sur le contenu réel
-- **Vue par catégorie** : pour chaque catégorie, une barre header navy/gold (titre + count) suivie des lignes produits en colonnes Streamlit
-- **Chaque ligne produit** : `nom · conditionnement · prix · bouton "Ouvrir"`
-- **Clic sur "Ouvrir"** → ouvre la **fiche produit** (via `st.session_state.editing_product_id`)
-- **Fiche produit** (`render_fiche_produit`) : header avec page_header dédié, form édition (nom, catégorie, conditionnement, prix), boutons "Valider les modifications" / "Supprimer la référence" (avec checkbox de confirmation), aperçu courbe Plotly de l'évolution des prix de la ref + bouton vers le détail complet
-- **Bouton "← Retour au catalogue"** en haut de la fiche
-- **Section "Ajouter un produit"** en bas du catalogue : form simplifié, pas de seuil d'alerte
-- **15 refs en "prix à définir"** affichées en rouge — à compléter manuellement par l'utilisateur via la fiche produit
-- L'ancienne section "Modifier une référence" avec selectbox a été **supprimée** (remplacée par le clic depuis le catalogue)
+- Barre de filtres : recherche · catégorie · conditionnement
+- Vue par catégorie : barre header navy/gold + lignes produits en colonnes Streamlit + **`zk-cat-sep` après chaque groupe** (séparation visuelle).
+- Clic sur "Ouvrir" → fiche produit (`render_fiche_produit`) avec édition complète, suppression confirmée, courbe d'évolution + lien vers détail prix.
+- Section "Ajouter un produit" en bas. Pas de seuil d'alerte à la création.
+
+#### Évolution des prix (refondue)
+- Vue principale : 4 KPIs (refs concernées · total changements · dernière modif · variation moyenne) + filtres texte/catégorie + tableau résumé par produit (prix initial → actuel, variation %, nb modifs, date, bouton Détail).
+- Fiche prix : retour, page header, 4 KPIs (prix initial, actuel, variation totale, nb changements), courbe Plotly navy/gold shape=hv, historique chronologique HTML.
+
+#### Fiches techniques (Groupe — caché, code conservé)
+Placeholder. Le module a été déplacé par restaurant.
+
+### Pages restaurant (×4)
+
+| Page | État |
+|---|---|
+| Dashboard | KPIs + chart 14j + alertes (agrégées par produit) |
+| Inventaire | **Refondu — saisie inline par lieu (bar/réserve)** |
+| Historique inventaire | **NOUVEAU — snapshots mensuels figés** |
+| Ventes & Ratios | KPIs + courbe réel/théorique + form saisie |
+| Fiches techniques | **NOUVEAU — cocktails / plats avec calcul ratio/coefficient** |
+| ~~Mouvements~~ | retiré de la nav, route encore disponible par URL |
+
+---
+
+## 7. Catalogue produits — données réelles
+
+- **729 références**, **33 catégories** dans `seed_data.py`, issues de `base prix wac .xlsx`.
+- Magnums conservés en catégories séparées.
+- Format `bouteille` par défaut quand non précisé.
+- 15 refs en `prix à définir` (affichées en rouge dans le catalogue) — à compléter via la fiche produit.
 
 `FORMATS_PREDEFINIS` (étendu pour boissons) :
 - `bouteille` (par défaut)
@@ -140,108 +151,111 @@ KPIs · tableau résumé restos · chart CA consolidé 30j. **Stable.**
 - **g/kg** : 100g, 150g, 200g, 250g, 500g, 750g, 1kg, 1.5kg, 2kg, 3kg, 5kg, 10kg
 - **génériques** : pièce, lot, carton, douzaine, barquette
 
-#### Évolution des prix (à refondre — voir §8)
-**État actuel (à remplacer) :**
-- Routing : `?page=groupe_prix`
-- Table SQLite `historique_prix` (produit_id, ancien_prix, nouveau_prix, date_changement)
-- Log automatique à chaque changement de prix (via `db.update_produit()`)
-- Au démarrage : seed un point d'ancrage par produit existant si la table est vide
-- 3 KPIs : nb total de changements · dernière modification · variation moyenne (%)
-- Selectbox "Toutes les références" ou une seule
-- Si une réf : courbe Plotly (ligne navy + points gold) + tableau des changements
-- Sinon : tableau des 30 derniers changements
-- Variations en rouge (hausse) / success (baisse) / muted (flat)
+---
 
-**À refondre :** structure plus lisible et exploitable, vue tableau résumé par produit (avec n° de modifs, prix initial → prix actuel, variation totale), clic sur un produit → fiche prix dédiée avec courbe + détail chronologique. CSS pour cette refonte est déjà en place (`zk-prix-head`, `zk-prix-name`, `zk-fiche-price-block`, `zk-fiche-price-row`, etc.).
+## 8. Modules détaillés (nouveautés)
 
-#### Fiches techniques
-Placeholder "Module en préparation".
+### 8.1 Fiches techniques par restaurant
 
-### Pages Restaurant (×4)
+**Tables** : `fiches_techniques` (id, restaurant_id, type ['cocktail'|'plat'], nom, prix_vente_ttc, tva, notes, dates) + `fiche_ingredients` (id, fiche_id, produit_id, quantite, unite_recette, ordre).
 
-| Page | État |
-|---|---|
-| Dashboard | Stable — banner navy + KPIs + chart 14j + alertes + derniers mouvements |
-| Inventaire | **À refondre — voir §8** (structure de saisie à changer) |
-| Mouvements | Stable — historique + form saisie + chart répartition |
-| Ventes & Ratios | Stable — KPIs + courbe réel/théorique + form saisie |
+**Logique de conversion** (`parse_unite_catalogue` dans app.py) :
+- `"75cl"` → 75 cl · `"1L"` → 100 cl · `"1.5kg"` → 1500 g · `"500g"` → 500 g
+- `bouteille`, `pièce`, `lot`, `carton`, `douzaine`, `barquette` → 1 pièce
+
+**Coût ingrédient** (`cout_ingredient`) : `prix × qté_recette / qté_format` dans la même dimension. Renvoie `None` si dimensions incompatibles (ex: g pour produit en cl) → affichage `"unité incompatible"`.
+
+**Indicateurs** (5 KPIs affichés) :
+- Coût matière brut
+- Coût + 10% perte (réaliste)
+- Prix HT = `TTC / (1 + TVA/100)`
+- **Ratio matière** = `coût+perte / prix_HT × 100` (en %, brut, sans seuil/couleur)
+- **Coefficient** = `prix_HT / coût+perte` (multiplicateur ×N.NN)
+
+**TVA par défaut** : 20% cocktail, 10% plat (modifiable par fiche).
+
+**Liaison catalogue** : on stocke uniquement `produit_id`, donc tout changement de prix dans le catalogue est répercuté **automatiquement** dans toutes les fiches qui utilisent cette référence.
+
+**Warning visuel** si une fiche contient des ingrédients à `prix_unitaire = 0`.
+
+### 8.2 Inventaire par lieu (saisie inline)
+
+**Lieux fixes : `bar` et `reserve`** (2 colonnes éditables par produit).
+
+**Table `inventaire`** modifiée : ajout de la colonne `lieu` + contrainte `UNIQUE (restaurant_id, produit_id, lieu)`. Migration douce via `ALTER TABLE` pour les DB existantes.
+
+**Saisie pratique (Option B retenue)** : 2 number_inputs visibles dans chaque ligne de la liste (Bar / Réserve), sauvegarde automatique on_change vers la DB (callback `_save_qte_callback`). Toast affiché en cas d'erreur DB.
+
+**4 KPIs en haut de page** : nb références en stock · valeur totale · alertes (sous seuil) · dernière saisie.
+
+**Filtres** : recherche + catégorie + lieu (Tous / Bar uniquement / Réserve uniquement). Quand on filtre sur un seul lieu, l'autre est affiché en lecture seule.
+
+**Fiche stock dédiée** (clic sur "Fiche") : 3 KPIs (stock total, valeur, état OK/Alerte), form Bar/Réserve avec notes par lieu.
+
+**Bouton "Clôturer le mois"** en bas → crée un snapshot figé.
+
+### 8.3 Historique inventaire (snapshots mensuels)
+
+**Tables** : `inventaires_mensuels` (id, restaurant_id, mois `YYYY-MM`, date_cloture, valeur_totale, nb_refs, notes) + `inventaire_mensuel_lignes` (id, inventaire_mensuel_id, produit_id, lieu, quantite, **prix_snapshot**).
+
+**Prix figé** au moment de la clôture pour que la valorisation historique reste juste même si les prix bougent ensuite.
+
+**Clôture** (`db.cloturer_inventaire_mois`) : copie toutes les lignes inventaire courant avec quantité > 0 du resto. Si snapshot du même mois existe déjà → **écrasement** (suppression puis re-création).
+
+**Vue principale** : 4 KPIs valorisation (valeur dernier inventaire · variation vs M-1 · nb refs · moyenne 3 mois) + liste des snapshots.
+
+**Détail d'un mois** : KPIs + tableau complet par catégorie avec qté bar/réserve, prix figé, valeur. **Chaque produit est cliquable** vers son détail snapshotté.
+
+**Détail produit dans snapshot** : 4 KPIs (qté bar, qté réserve, total, valeur figée) + note rappelant que les prix sont figés au jour de clôture.
 
 ---
 
-## 7. Catalogue produits — données réelles importées
+## 9. Bugs corrigés (audit interne du 2 mai 2026)
 
-Le seed dummy (15 produits) a été remplacé par le **catalogue WAC réel** issu de `base prix wac .xlsx` :
-
-- **729 références**, **33 catégories** dans `seed_data.py`
-- Catégories conservées telles quelles depuis le fichier source (CUBIS, RHUMS, WHISKYS, GINS, VODKA, TEQUILAS, APERITIF/LIQUEUR/BITTER, DIGESTIFS, EAUX LITRE, SCHWEPPES TONIC, SODAS/SOFT, PAGO, JUS LITRE, SODA LITRE, BIERE, BIERE FUT, SIROP, PUREE, COMPLEMENT BAR, EPICE/FRUIT, CAFE, VIN ROSE, VIN ROSE (MAGNUM), VIN BLANC, VIN ROUGE, VIN ROUGE (MAGNUM), etc.)
-- Magnums **conservés en catégories séparées** comme demandé
-- Format `bouteille` par défaut quand non précisé dans la source
-- L'inventaire et les mouvements ont été retirés du seed → la DB démarre **propre** côté restaurants (les vrais relevés seront saisis via les pages restaurants)
-
-**Pour ré-importer / modifier le catalogue source :**
-1. Mettre à jour `base prix wac .xlsx` (local, non commit)
-2. Re-exécuter le script de parsing (à recréer si besoin — voir l'historique git du commit `777df90`)
-3. Le script génère un nouveau `seed_data.py`
-4. **Attention :** le seed ne se déclenche QUE si la table `restaurants` est vide. Pour forcer un re-seed sur Streamlit Cloud, il faut **Reboot l'app** depuis Manage app.
+- **DB** : suppression de `upsert_inventaire` (mort code, cassait `UNIQUE` sur lieu).
+- **DB** : `get_kpis_groupe` agrège correctement les alertes par (resto, produit) avec `HAVING SUM(qte) > 0` (plus de doublons).
+- `_save_qte_callback` notifie via `st.toast` au lieu d'avaler les exceptions.
+- Keys de saisie inline préfixées par le filtre lieu (évite collision Tous/Bar/Réserve).
+- `query_params.update()` (compat Streamlit récent).
+- Validation mois clôture par regex stricte `^\d{4}-(0[1-9]|1[0-2])$`.
+- Garde `if not f` dans `render_fiche_editor` si fiche supprimée concurremment.
+- `_cleanup_state_on_nav()` central : purge des états `viewing_*` / `editing_*` au changement de page.
+- Warning visuel si une fiche technique contient des ingrédients à prix=0.
+- Short name resto : troncature dynamique (`nom[:16] + "…"`) au lieu du hardcode "Les Halles".
 
 ---
 
-## 8. Prochaines étapes
+## 10. Renforts identité visuelle (DA)
 
-### 8.1 — Refonte page Évolution des prix (immédiat)
+Charte handoff/ appliquée plus strictement :
+- **Wordmark Inter 700** (et non 600) dans tous les SVG, conformément à BRAND.md.
+- **Hero accueil** : motif barres décoratif en filigrane gold (métaphore niveaux de stock), eyebrow gold uppercase tracking 0.32em, filet gold sous le logo, baseline en Fraunces italic 30px.
+- **Cards restaurants** : eyebrow `Établissement N`, mini-pictogramme barres en couleur d'accent, hover plus marqué (translate Y -3px, border gold subtle).
+- **Cards Outils Groupe** : flèche gold animée au hover, sub-text descriptif sous chaque CTA.
+- **Banner restaurants** : motif barres en filigrane en couleur d'accent du resto, eyebrow `Établissement`, titre 30px tracking -0.025em, ombre douce.
+- **Footer brand minimal** sur l'accueil : wordmark + filet + baseline italic.
 
-**À faire dans la prochaine session.** L'utilisateur a validé l'approche, le CSS est déjà ajouté, **seule la fonction `render_groupe_prix()` reste à réécrire** dans `app.py`.
-
-**Spec de la refonte :**
-
-1. **Vue principale** (par défaut) : page lisible avec
-   - 4 KPIs : références concernées (qui ont changé de prix) · total des changements · dernière modification · variation moyenne
-   - **Tableau résumé par produit** : une ligne par référence ayant changé de prix, avec colonnes :
-     - Référence (nom)
-     - Catégorie · Format
-     - Évolution `prix_initial € → prix_actuel €`
-     - Variation totale (%) — en rouge si hausse, success si baisse
-     - Nombre de changements
-     - Date dernière modif
-     - Bouton **"Détail"** par ligne
-   - Filtres en haut : recherche texte + filtre catégorie
-   - Tri par défaut : dernière modification (plus récent en haut)
-
-2. **Clic sur "Détail"** → ouvre la **fiche prix** d'un produit (via `st.session_state.viewing_price_product_id`) :
-   - Bouton "← Retour à l'évolution des prix"
-   - `page_header` avec nom du produit + catégorie · format
-   - 4 KPIs : prix initial · prix actuel · variation totale · nombre de changements
-   - **Courbe Plotly** ligne navy + points gold (shape="hv" pour les paliers)
-   - **Détail chronologique** : tableau HTML avec date · évolution `ancien → nouveau` · variation % — utiliser les classes CSS `zk-fiche-price-block`, `zk-fiche-price-head`, `zk-fiche-price-row` déjà ajoutées
-
-3. **Cohérence avec le catalogue** : reprendre exactement le même pattern de routing par session_state que la fiche produit du catalogue, avec un bouton retour clair
-
-**Code de référence :** voir `render_fiche_produit()` dans `app.py` (pattern session_state + bouton retour + page_header) — la fiche prix doit suivre la même structure.
-
-### 8.2 — Refonte saisie inventaire restaurants (plus tard)
-
-L'utilisateur a annoncé qu'il veut changer la structure de saisie d'inventaire pour chaque restaurant. **La spec exacte sera donnée plus tard**, après validation de la refonte des prix. Voir `app.py:render_resto_inventaire()` pour le code actuel (tableau filtrable + form de saisie classique).
-
-Quand la spec arrive : **proposer l'approche AVANT de coder**, attendre validation, puis implémenter et pousser sur GitHub directement.
+CSS classes principales ajoutées : `.zk-hero-eyebrow`, `.zk-hero-rule`, `.zk-home-card-mini`, `.zk-home-card-eyebrow`, `.zk-home-access::after`, `.zk-resto-motif`, `.zk-resto-eyebrow`, `.zk-footer*`, `.zk-warn-line`, `.zk-cat-sep`, `.zk-fiches-head`, `.zk-fiches-ing-head`, `.zk-inv-head`, `.zk-inv-snap-head`.
 
 ---
 
-## 9. Décisions UX/design clés prises
+## 11. Décisions UX/design clés prises
 
-- **Tabs internes vs scroll** : navbar top avec dropdowns CSS (Linear/Vercel pattern)
-- **Chaque restaurant a son propre dropdown** (pas un mega-menu "Restaurants")
-- **Sidebar Streamlit cachée** complètement
-- **KPI cards** avec barre d'accent gauche 3px (pas de border uniforme)
-- **Badges en pill** avec dot et mono uppercase
-- **Banner restaurant** : navy strict + barre d'accent latérale (pas de gradient)
-- **Routing par query params** `?page=xxx` (compatible Streamlit Cloud)
-- **Logo SVG inline** dans navbar (pas de fichier externe pour fiabilité)
-- **Catalogue : vue par blocs**, pas de DataFrame Streamlit
-- **Édition de référence** : form séparé sous la vue lecture (pas d'édition inline car incompatible avec rendu HTML custom)
+- Tabs internes vs scroll : navbar top avec dropdowns CSS (Linear/Vercel pattern)
+- Chaque restaurant a son propre dropdown
+- Sidebar Streamlit cachée
+- KPI cards avec barre d'accent gauche 3px
+- Banner restaurant : navy + barre d'accent latérale (pas de gradient) + motif barres en filigrane
+- Routing par query params `?page=xxx`
+- Logo SVG inline (Inter 700, métaphore barres de stock)
+- Catalogue : vue par blocs avec séparateurs, pas de DataFrame
+- Fiches techniques : 1 fichier par fiche, ingrédients en liste éditable
+- Inventaire : saisie inline (Option B) directement dans la liste
+- Historique : snapshot avec prix figé pour valorisation juste
 
 ---
 
-## 10. Déploiement
+## 12. Déploiement
 
 **Repo GitHub :** https://github.com/anto19plas-source/zaiko (public)
 **Streamlit Cloud :** URL configurée par l'utilisateur sur share.streamlit.io
@@ -252,7 +266,7 @@ Quand la spec arrive : **proposer l'approche AVANT de coder**, attendre validati
 2. `git add -A && git commit -m "..." && git push`
 3. Streamlit Cloud redéploie automatiquement (~2 min)
 
-**Note sur le re-seed :** la DB SQLite est éphémère sur Streamlit Cloud (le conteneur recrée `zaiko.db` à chaque redémarrage). Le seed ne se redéclenche QUE si la table `restaurants` est vide. Si après un push une mise à jour du catalogue ne s'affiche pas, faire **Reboot app** depuis Manage app sur Streamlit Cloud pour forcer un nouveau démarrage propre.
+**Reboot nécessaire** sur Streamlit Cloud après tout changement de schéma DB (Manage app → Reboot app), car la DB est éphémère mais peut conserver l'ancienne structure tant que le conteneur tourne.
 
 **Lancement local :**
 ```bash
@@ -263,41 +277,44 @@ streamlit run app.py
 
 ---
 
-## 11. Préférences utilisateur (importantes)
+## 13. Préférences utilisateur (importantes)
 
 - **Communication en français**
 - **Toujours proposer une approche AVANT de coder**, attendre validation
-- **Après validation et fin du codage : push direct sur `origin/main` sans test local** (l'utilisateur valide via Streamlit Cloud, pas en local) — voir mémoire `feedback_zaiko_workflow.md`
+- **Après validation et fin du codage : push direct sur `origin/main` sans test local** (l'utilisateur valide via Streamlit Cloud, pas en local)
 - **Vérifier qu'il n'y a pas d'erreurs après modification** (`python3 -m py_compile`)
 - **Pas d'emojis dans l'app finale** (charte stricte)
-- **Style "professionnel, métier d'abord, calme, posé"** (cf BRAND.md §6)
+- **Style "professionnel, métier d'abord, calme, posé"**
 - **Ne PAS utiliser** : "révolutionnaire", "game-changer", références asiatiques visuelles, néons, gradients flashy
 
 ---
 
-## 12. Pour reprendre la session
+## 14. Pour reprendre la session
 
 **Premier message à donner à la nouvelle session Claude :**
 
 > Salut, je reprends Zaiko. Lis `/Users/plasantonin/Desktop/CODE ZAIKO/CONTEXT.md` pour avoir l'état actuel.
 >
-> La prochaine étape est §8.1 : refondre la page **Évolution des prix**. La spec est dans le CONTEXT, le CSS est déjà en place, il reste juste à réécrire `render_groupe_prix()` dans `app.py` selon la spec.
+> Le projet est dans un état stable et commercialisable : page d'accueil avec hero brand fort, catalogue groupe, évolution des prix, et par restaurant : dashboard / inventaire (saisie inline par lieu bar+réserve) / historique inventaire (snapshots mensuels figés) / ventes & ratios / fiches techniques (cocktails+plats avec ratio et coefficient).
 >
-> Avant de coder, confirme-moi que tu as bien lu la spec §8.1 et le pattern `render_fiche_produit()` qui sert de référence. Pousse sur `main` directement après codage.
+> Confirme-moi que tu as bien lu le CONTEXT, puis dis-moi sur quoi tu peux m'aider ensuite.
 
 ---
 
-## 13. Journal de session (récap des dernières évolutions)
+## 15. Journal de session (récap des dernières évolutions)
 
-**Session du 30 avril 2026 (commit `73b551e`) — Refonte catalogue + fiche produit**
-- `FORMATS_PREDEFINIS` étendu (toutes mesures bar 1-8cl, standards boissons 15/20/35/40/44/60/66/70cl, fûts 15/25/50L, magnums 100/150cl, formats solides complets, génériques douzaine/barquette)
-- Catalogue refondu : barre catégorie navy/gold + lignes produits en colonnes Streamlit avec bouton "Ouvrir" sur chaque ligne
-- Nouvelle fonction `render_fiche_produit()` : édition complète d'une référence (nom, catégorie, conditionnement, prix), suppression avec checkbox de confirmation, aperçu courbe d'évolution des prix + lien vers le détail complet
-- Pattern `st.session_state.editing_product_id` pour le routing fiche/catalogue
-- Suppression de l'ancienne section "Modifier une référence" avec selectbox
-- CSS ajouté pour la refonte de la page prix (`.zk-prix-*`, `.zk-fiche-price-*`) — pas encore utilisé
-- **Reste à faire :** réécrire `render_groupe_prix()` selon spec §8.1
+**Session du 2 mai 2026 (commits récents `137f3fb` → `c9de1ad`)**
+
+- **`684d77e` — Évolution des prix** : refonte complète de `render_groupe_prix()`. Vue principale (4 KPIs + tableau résumé par produit + filtres) et fiche prix dédiée (KPIs, courbe, historique chronologique). Pattern session_state `viewing_price_product_id`.
+
+- **`a2ed4d8` — Refonte visuelle navbar + accueil + catalogue** : navbar 60→76px, logo agrandi, page d'accueil avec hero navy-deep + slogan Fraunces, séparateurs `zk-cat-sep` dans le catalogue.
+
+- **`137f3fb` — Fiches techniques par restaurant** : 2 nouvelles tables, parsing unités, calcul ratio/coefficient, TVA 20% cocktail / 10% plat, UI éditeur avec ingrédients en liste éditable + 5 KPIs (coût brut, coût+perte, prix HT, ratio, coefficient).
+
+- **`ebeb077` — Refonte inventaires + historique** : ajout colonne `lieu` à inventaire (bar/réserve), saisie inline (Option B), `set_inventaire_ligne` avec callback on_change, page Historique inventaire avec 4 KPIs valorisation, snapshots mensuels figés (`inventaires_mensuels` + `inventaire_mensuel_lignes`), détail mois → détail produit cliquable. "Mouvements" retiré de la nav.
+
+- **`c9de1ad` — Bugfixes audit + DA renforcée** : 10 bugs corrigés (mort code, agrégation alertes, callback silent, keys collision, regex mois, garde fiche supprimée, cleanup states, warning prix=0, etc.) + identité visuelle renforcée (wordmark Inter 700, hero avec motif barres, cards restos avec mini-pictogrammes, banner avec motif d'accent, footer brand).
 
 ---
 
-*Document mis à jour le 1ᵉʳ mai 2026 — fin de session après refonte catalogue + fiche produit cliquable.*
+*Document mis à jour le 2 mai 2026 — projet Zaiko commercialisable, charte appliquée strictement, modules complets.*
