@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -99,7 +100,7 @@ LOGO_LIGHT_SVG = """
   <rect x="30"  y="80"  width="34"  height="14" rx="2" fill="#B23A2A" opacity="0.9"></rect>
   <rect x="10"  y="100" width="100" height="18" rx="2" fill="#0F2A4A"></rect>
   <rect x="14"  y="114" width="92"  height="4"        fill="#C9A24B" opacity="0.9"></rect>
-  <text x="146" y="92" font-family="Inter,system-ui,sans-serif" font-weight="600"
+  <text x="146" y="92" font-family="Inter,system-ui,sans-serif" font-weight="700"
         font-size="84" letter-spacing="-3.4" fill="#0B1220">Zaiko</text>
 </svg>
 """
@@ -431,27 +432,53 @@ def inject_css():
     .zk-resto-banner {
         background: var(--zk-navy);
         border-radius: 14px;
-        padding: 28px 32px;
+        padding: 32px 36px;
         margin-bottom: 28px;
         position: relative;
         overflow: hidden;
         border: 1px solid var(--zk-navy-soft);
+        box-shadow: 0 8px 24px -10px rgba(8, 26, 47, .35);
     }
     .zk-resto-accent-bar {
         position: absolute;
         top: 0; left: 0; bottom: 0;
         width: 4px;
+        z-index: 2;
+    }
+    .zk-resto-motif {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        width: 280px;
+        height: 200px;
+        z-index: 1;
+        pointer-events: none;
+    }
+    .zk-resto-eyebrow {
+        position: relative;
+        z-index: 2;
+        font-family: var(--zk-font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--zk-gold);
+        margin-bottom: 12px;
     }
     .zk-resto-name {
+        position: relative;
+        z-index: 2;
         font-family: var(--zk-font-sans);
-        font-size: 28px;
+        font-size: 30px;
         font-weight: 700;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.025em;
         color: var(--zk-bone);
         line-height: 1.05;
         margin: 0;
     }
     .zk-resto-type {
+        position: relative;
+        z-index: 2;
         font-family: var(--zk-font-mono);
         font-size: 11px;
         font-weight: 500;
@@ -867,30 +894,54 @@ def inject_css():
     .zk-fiche-price-row:hover { background: var(--zk-paper); }
 
     /* ═══════════════════════════════════════
-       PAGE D'ACCUEIL
+       PAGE D'ACCUEIL — Hero & cards
     ═══════════════════════════════════════ */
     .zk-hero {
         background: var(--zk-navy-deep);
         border-radius: 18px;
-        padding: 72px 40px 64px;
+        padding: 88px 40px 76px;
         display: flex;
         flex-direction: column;
         align-items: center;
         text-align: center;
         margin-bottom: 44px;
         border: 1px solid rgba(201, 162, 75, 0.14);
-        box-shadow: 0 8px 40px -8px rgba(8, 26, 47, .35);
+        box-shadow: 0 24px 48px -16px rgba(8, 26, 47, .55);
+        position: relative;
+        overflow: hidden;
     }
-    .zk-hero-logo { margin-bottom: 32px; }
+    .zk-hero-eyebrow {
+        position: relative;
+        z-index: 2;
+        font-family: var(--zk-font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: var(--zk-gold);
+        margin-bottom: 28px;
+    }
+    .zk-hero-logo { position: relative; z-index: 2; margin-bottom: 24px; }
+    .zk-hero-rule {
+        position: relative;
+        z-index: 2;
+        width: 56px;
+        height: 2px;
+        background: var(--zk-gold);
+        margin: 14px 0 26px 0;
+        border-radius: 1px;
+    }
     .zk-hero-quote {
+        position: relative;
+        z-index: 2;
         font-family: var(--zk-font-serif);
         font-style: italic;
         font-weight: 400;
-        font-size: 26px;
-        line-height: 1.35;
+        font-size: 30px;
+        line-height: 1.3;
         letter-spacing: -0.015em;
-        color: rgba(244, 239, 230, 0.60);
-        max-width: 480px;
+        color: rgba(244, 239, 230, 0.78);
+        max-width: 560px;
         margin: 0;
     }
 
@@ -904,16 +955,18 @@ def inject_css():
         background: white;
         border: 1px solid var(--zk-rule);
         border-radius: 12px;
-        padding: 22px 20px 20px 24px;
+        padding: 22px 22px 22px 26px;
         text-decoration: none !important;
         display: block;
-        transition: box-shadow .15s, transform .12s;
+        transition: box-shadow .18s ease, transform .14s ease, border-color .18s ease;
         position: relative;
         overflow: hidden;
+        min-height: 168px;
     }
     .zk-home-card:hover {
-        box-shadow: 0 6px 20px -4px rgba(8, 26, 47, .12);
-        transform: translateY(-2px);
+        box-shadow: 0 12px 28px -8px rgba(8, 26, 47, .18);
+        transform: translateY(-3px);
+        border-color: rgba(201, 162, 75, 0.35);
         text-decoration: none !important;
     }
     .zk-home-card-accent {
@@ -922,13 +975,29 @@ def inject_css():
         width: 4px;
         border-radius: 12px 0 0 12px;
     }
+    .zk-home-card-mini {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        opacity: 0.65;
+    }
+    .zk-home-card-eyebrow {
+        font-family: var(--zk-font-mono);
+        font-size: 9.5px;
+        font-weight: 500;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--zk-muted);
+        margin-bottom: 12px;
+    }
     .zk-home-card-name {
         font-family: var(--zk-font-sans);
-        font-size: 15px;
-        font-weight: 600;
+        font-size: 17px;
+        font-weight: 700;
         color: var(--zk-ink);
         margin-bottom: 4px;
-        letter-spacing: -0.01em;
+        letter-spacing: -0.015em;
+        line-height: 1.15;
     }
     .zk-home-card-type {
         font-family: var(--zk-font-mono);
@@ -937,15 +1006,15 @@ def inject_css():
         letter-spacing: 0.2em;
         text-transform: uppercase;
         color: var(--zk-muted);
-        margin-bottom: 18px;
+        margin-bottom: 22px;
     }
     .zk-home-card-cta {
         font-family: var(--zk-font-mono);
         font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 0.12em;
+        font-weight: 600;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: var(--zk-muted);
+        color: var(--zk-navy);
     }
 
     .zk-home-access-grid {
@@ -956,16 +1025,30 @@ def inject_css():
     .zk-home-access {
         background: var(--zk-navy);
         border: 1px solid var(--zk-navy-soft);
-        border-radius: 10px;
-        padding: 20px 22px;
+        border-radius: 12px;
+        padding: 22px 24px;
         text-decoration: none !important;
         display: block;
-        transition: background .14s;
+        transition: background .14s, border-color .14s;
+        position: relative;
+    }
+    .zk-home-access::after {
+        content: "→";
+        position: absolute;
+        top: 22px;
+        right: 22px;
+        color: var(--zk-gold);
+        font-family: var(--zk-font-sans);
+        font-weight: 500;
+        opacity: 0.55;
+        transition: opacity .14s, transform .14s;
     }
     .zk-home-access:hover {
         background: var(--zk-navy-soft);
+        border-color: rgba(201, 162, 75, 0.30);
         text-decoration: none !important;
     }
+    .zk-home-access:hover::after { opacity: 1; transform: translateX(3px); }
     .zk-home-access-eyebrow {
         font-family: var(--zk-font-mono);
         font-size: 10px;
@@ -973,14 +1056,65 @@ def inject_css():
         letter-spacing: 0.22em;
         text-transform: uppercase;
         color: var(--zk-muted-dark);
-        margin-bottom: 6px;
+        margin-bottom: 8px;
     }
     .zk-home-access-name {
         font-family: var(--zk-font-sans);
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 600;
         color: var(--zk-bone);
         letter-spacing: -0.01em;
+        margin-bottom: 4px;
+    }
+    .zk-home-access-sub {
+        font-family: var(--zk-font-sans);
+        font-size: 12px;
+        color: var(--zk-muted-dark);
+        line-height: 1.4;
+    }
+
+    /* Footer brand minimal */
+    .zk-footer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        margin-top: 56px;
+        padding-top: 28px;
+        border-top: 1px solid var(--zk-rule);
+        opacity: 0.7;
+    }
+    .zk-footer-mark {
+        font-family: var(--zk-font-sans);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        color: var(--zk-ink);
+    }
+    .zk-footer-bar {
+        width: 24px;
+        height: 1px;
+        background: var(--zk-rule);
+    }
+    .zk-footer-tag {
+        font-family: var(--zk-font-serif);
+        font-style: italic;
+        font-size: 13px;
+        color: var(--zk-muted);
+    }
+
+    /* Avertissement non-bloquant */
+    .zk-warn-line {
+        background: rgba(201, 162, 75, .10);
+        border: 1px solid rgba(201, 162, 75, .30);
+        border-left: 3px solid var(--zk-gold);
+        border-radius: 6px;
+        padding: 11px 14px;
+        font-family: var(--zk-font-sans);
+        font-size: 13px;
+        color: var(--zk-ink);
+        line-height: 1.5;
+        margin: 8px 0 16px 0;
     }
 
     /* ═══════════════════════════════════════
@@ -1123,8 +1257,8 @@ def render_navbar(current_page: str):
         accent = r["accent"]
         nom    = r["nom"]
 
-        # short display name (avoid overflow)
-        short = nom if len(nom) <= 18 else "Les Halles"
+        # short display name (avoid overflow) — troncature dynamique
+        short = nom if len(nom) <= 18 else (nom[:16].rstrip() + "…")
 
         links = "".join(
             f'<a href="?page={key}_{sid}" class="{_link_active(key + "_" + sid)}" target="_self">'
@@ -1319,8 +1453,22 @@ def calculer_indicateurs_fiche(ingredients: list, prix_vente_ttc: float, tva: fl
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_accueil():
-    # ── Hero navy-deep avec logo grand format + baseline ──
-    logo_hero_svg = '''<svg width="310" height="114" viewBox="0 0 360 132" xmlns="http://www.w3.org/2000/svg" aria-label="Zaiko">
+    # ── Hero navy-deep avec motif barres + Display + baseline ──
+    # Motif de stock en filigrane (barres horizontales empilées)
+    pattern_svg = '''<svg width="100%" height="100%" viewBox="0 0 600 480" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.06;pointer-events:none;">
+      <g fill="#C9A24B">
+        <rect x="60"  y="40"  width="200" height="14" rx="2"></rect>
+        <rect x="60"  y="68"  width="120" height="14" rx="2" opacity="0.7"></rect>
+        <rect x="60"  y="96"  width="160" height="14" rx="2" opacity="0.5"></rect>
+        <rect x="60"  y="124" width="200" height="14" rx="2"></rect>
+        <rect x="380" y="320" width="180" height="14" rx="2"></rect>
+        <rect x="380" y="348" width="100" height="14" rx="2" opacity="0.7"></rect>
+        <rect x="380" y="376" width="140" height="14" rx="2" opacity="0.5"></rect>
+        <rect x="380" y="404" width="180" height="14" rx="2"></rect>
+      </g>
+    </svg>'''
+
+    logo_hero_svg = '''<svg width="320" height="118" viewBox="0 0 360 132" xmlns="http://www.w3.org/2000/svg" aria-label="Zaiko">
       <g>
         <rect x="10"  y="14"  width="100" height="18" rx="2" fill="#F4EFE6"></rect>
         <rect x="14"  y="14"  width="92"  height="4"        fill="#C9A24B" opacity="0.95"></rect>
@@ -1330,41 +1478,66 @@ def render_accueil():
         <rect x="10"  y="100" width="100" height="18" rx="2" fill="#F4EFE6"></rect>
         <rect x="14"  y="114" width="92"  height="4"        fill="#C9A24B" opacity="0.95"></rect>
       </g>
-      <text x="146" y="92" font-family="Inter,system-ui,sans-serif" font-weight="600"
+      <text x="146" y="92" font-family="Inter,system-ui,sans-serif" font-weight="700"
             font-size="84" letter-spacing="-3.4" fill="#F4EFE6">Zaiko</text>
     </svg>'''
 
     st.markdown(f'''
     <div class="zk-hero">
+        {pattern_svg}
+        <div class="zk-hero-eyebrow">Groupe WAC · 4 établissements</div>
         <div class="zk-hero-logo">{logo_hero_svg}</div>
-        <p class="zk-hero-quote">Le stock bouge. Zaiko s'adapte.</p>
+        <div class="zk-hero-rule"></div>
+        <p class="zk-hero-quote">« Le stock bouge. Zaiko s'adapte. »</p>
     </div>
     ''', unsafe_allow_html=True)
 
     # ── Établissements ──
     section("Établissements")
+
+    # Mini SVG décoratif (3 barres) coloré par accent du resto
+    def _mini_stock(accent: str) -> str:
+        return f'''<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="0"  y="2"  width="32" height="4" rx="1" fill="{accent}" opacity="0.95"></rect>
+          <rect x="14" y="11" width="14" height="3" rx="1" fill="{accent}" opacity="0.65"></rect>
+          <rect x="8"  y="18" width="14" height="3" rx="1" fill="{accent}" opacity="0.45"></rect>
+          <rect x="0"  y="26" width="32" height="4" rx="1" fill="{accent}" opacity="0.95"></rect>
+        </svg>'''
+
     cards_html = "".join(f'''
         <a class="zk-home-card" href="?page={r["key"]}_dashboard" target="_self">
             <div class="zk-home-card-accent" style="background:{r["accent"]}"></div>
+            <div class="zk-home-card-mini">{_mini_stock(r["accent"])}</div>
+            <div class="zk-home-card-eyebrow">Établissement {idx+1}</div>
             <div class="zk-home-card-name">{r["nom"]}</div>
             <div class="zk-home-card-type">{r["type"]}</div>
-            <div class="zk-home-card-cta">Accéder</div>
-        </a>''' for r in RESTAURANTS)
+            <div class="zk-home-card-cta">Accéder &nbsp;→</div>
+        </a>''' for idx, r in enumerate(RESTAURANTS))
     st.markdown(f'<div class="zk-home-grid">{cards_html}</div>', unsafe_allow_html=True)
 
     # ── Outils Groupe WAC ──
     section("Outils Groupe WAC")
     access_items = [
-        ("groupe_catalogue", "Catalogue produits"),
-        ("groupe_prix",      "Évolution des prix"),
-        ("groupe_fiches",    "Fiches techniques"),
+        ("groupe_catalogue", "Catalogue produits", "Référentiel des 729 références"),
+        ("groupe_prix",      "Évolution des prix", "Suivi des variations tarifaires"),
+        ("groupe_dashboard", "Vue consolidée",     "KPIs et CA des 4 enseignes"),
     ]
     access_html = "".join(f'''
         <a class="zk-home-access" href="?page={pid}" target="_self">
             <div class="zk-home-access-eyebrow">Groupe WAC</div>
             <div class="zk-home-access-name">{label}</div>
-        </a>''' for pid, label in access_items)
+            <div class="zk-home-access-sub">{sub}</div>
+        </a>''' for pid, label, sub in access_items)
     st.markdown(f'<div class="zk-home-access-grid">{access_html}</div>', unsafe_allow_html=True)
+
+    # ── Footer brand ──
+    st.markdown('''
+    <div class="zk-footer">
+        <span class="zk-footer-mark">Zaiko</span>
+        <span class="zk-footer-bar"></span>
+        <span class="zk-footer-tag">Le stock bouge. Zaiko s'adapte.</span>
+    </div>
+    ''', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1510,7 +1683,7 @@ def render_fiche_produit(prod, cats, cat_labels):
         if st.button("Voir le détail complet de l'évolution des prix", key="goto_prix_from_fiche"):
             st.session_state.viewing_price_product_id = prod["id"]
             st.session_state.pop("editing_product_id", None)
-            st.query_params["page"] = "groupe_prix"
+            st.query_params.update({"page": "groupe_prix"})
             st.rerun()
 
 
@@ -1901,9 +2074,20 @@ def render_groupe_fiches():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_resto_banner(resto: dict):
+    accent = resto["accent"]
+    motif = f'''<svg class="zk-resto-motif" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g fill="{accent}">
+        <rect x="20"  y="20"  width="120" height="10" rx="2" opacity="0.18"></rect>
+        <rect x="40"  y="38"  width="80"  height="8"  rx="2" opacity="0.12"></rect>
+        <rect x="60"  y="54"  width="100" height="8"  rx="2" opacity="0.10"></rect>
+        <rect x="20"  y="72"  width="120" height="10" rx="2" opacity="0.18"></rect>
+      </g>
+    </svg>'''
     st.markdown(f'''
     <div class="zk-resto-banner">
-        <div class="zk-resto-accent-bar" style="background:{resto["accent"]}"></div>
+        <div class="zk-resto-accent-bar" style="background:{accent}"></div>
+        {motif}
+        <div class="zk-resto-eyebrow">Établissement</div>
         <div class="zk-resto-name">{resto["nom"]}</div>
         <div class="zk-resto-type">{resto["type"]}</div>
     </div>
@@ -1984,8 +2168,11 @@ def _save_qte_callback(rid, pid, lieu, key):
         return
     try:
         db.set_inventaire_ligne(rid, pid, lieu, float(val))
-    except Exception:
-        pass
+    except Exception as e:
+        try:
+            st.toast(f"Erreur enregistrement : {e}", icon=None)
+        except Exception:
+            pass
 
 
 def render_resto_inventaire(resto: dict):
@@ -2096,9 +2283,12 @@ def render_resto_inventaire(resto: dict):
                     st.markdown(f'<div class="{name_class}">{label}</div>', unsafe_allow_html=True)
                 with c2:
                     st.markdown(f'<div class="zk-row-format">{p["unite"]}</div>', unsafe_allow_html=True)
+                # Suffixe basé sur le filtre lieu pour éviter les collisions de keys
+                # quand on bascule entre Tous / Bar / Réserve
+                lieu_tag = lieu_filter.split()[0].lower() if lieu_filter != "Tous lieux" else "all"
                 with c3:
                     if show_bar:
-                        key_bar = f"inv_qte_bar_{rid}_{pid}"
+                        key_bar = f"inv_qte_bar_{lieu_tag}_{rid}_{pid}"
                         st.number_input(
                             "bar", min_value=0.0, step=0.5, format="%.1f",
                             value=float(p["qte_bar"] or 0),
@@ -2110,7 +2300,7 @@ def render_resto_inventaire(resto: dict):
                         st.markdown(f'<div class="zk-row-format">{p["qte_bar"]:.1f}</div>', unsafe_allow_html=True)
                 with c4:
                     if show_res:
-                        key_res = f"inv_qte_res_{rid}_{pid}"
+                        key_res = f"inv_qte_res_{lieu_tag}_{rid}_{pid}"
                         st.number_input(
                             "res", min_value=0.0, step=0.5, format="%.1f",
                             value=float(p["qte_reserve"] or 0),
@@ -2150,8 +2340,8 @@ def render_resto_inventaire(resto: dict):
     with cc3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         if st.button("Clôturer le mois", key=f"btn_cloture_{rid}", use_container_width=True):
-            if mois_input and len(mois_input) == 7 and mois_input[4] == "-":
-                snap_id = db.cloturer_inventaire_mois(rid, mois_input)
+            if re.match(r"^\d{4}-(0[1-9]|1[0-2])$", mois_input or ""):
+                db.cloturer_inventaire_mois(rid, mois_input)
                 st.success(f"Inventaire {mois_input} clôturé. Visible dans l'historique.")
                 st.rerun()
             else:
@@ -2679,6 +2869,13 @@ def render_fiche_editor(resto: dict):
             }
         else:
             f = db.get_fiche(fiche_id)
+            if not f:
+                st.session_state.pop("editing_fiche_id", None)
+                st.session_state.pop("editing_fiche_type", None)
+                st.session_state.pop("editing_fiche_resto", None)
+                st.warning("Cette fiche n'existe plus.")
+                st.rerun()
+                return
             ings = db.get_fiche_ingredients(fiche_id)
             st.session_state[draft_key] = {
                 "id": f["id"], "type": f["type"], "nom": f["nom"],
@@ -2820,6 +3017,18 @@ def render_fiche_editor(resto: dict):
         {**ing, "_produit": produits_map.get(ing["produit_id"])}
         for ing in draft["ingredients"]
     ]
+    # Avertir si certains ingrédients ont un prix catalogue à 0 (fausse le coût)
+    refs_sans_prix = [
+        ing["_produit"]["nom"] for ing in ingredients_enriched
+        if ing.get("_produit") and not (ing["_produit"].get("prix_unitaire") or 0)
+    ]
+    if refs_sans_prix:
+        st.markdown(
+            f'<div class="zk-warn-line">Attention : {len(refs_sans_prix)} référence(s) avec prix à définir dans le catalogue — '
+            f'le coût matière en sera faussé. Réfs concernées : <b>{", ".join(refs_sans_prix[:5])}'
+            f'{"…" if len(refs_sans_prix) > 5 else ""}</b></div>',
+            unsafe_allow_html=True,
+        )
     ind = calculer_indicateurs_fiche(ingredients_enriched, draft["prix_vente_ttc"], draft["tva"])
 
     k1, k2, k3, k4, k5 = st.columns(5)
@@ -2890,7 +3099,42 @@ def render_fiche_editor(resto: dict):
 #  ROUTING
 # ═══════════════════════════════════════════════════════════════════════════════
 
+_PAGE_STATE_KEYS = {
+    "groupe_catalogue": ("editing_product_id",),
+    "groupe_prix":      ("viewing_price_product_id",),
+}
+
+
+def _cleanup_state_on_nav(current: str):
+    """Nettoie les states 'viewing/editing' quand on change de page."""
+    last = st.session_state.get("_last_page")
+    if last == current:
+        return
+    # On quitte une page qui avait des states résidentiels → on les vide
+    for page, keys in _PAGE_STATE_KEYS.items():
+        if last == page and current != page:
+            for k in keys:
+                st.session_state.pop(k, None)
+    # Pour les sous-pages restos, on nettoie au changement de sous-page
+    if last and current and last != current:
+        # Si on quitte une page d'inventaire / historique d'un resto donné
+        if not current.endswith("_inventaire"):
+            st.session_state.pop("viewing_stock_pid", None)
+            st.session_state.pop("viewing_stock_resto", None)
+        if not current.endswith("_historique"):
+            st.session_state.pop("viewing_snap_id", None)
+            st.session_state.pop("viewing_snap_resto", None)
+            st.session_state.pop("viewing_snap_pid", None)
+        if not current.endswith("_fiches"):
+            st.session_state.pop("editing_fiche_id", None)
+            st.session_state.pop("editing_fiche_type", None)
+            st.session_state.pop("editing_fiche_resto", None)
+    st.session_state["_last_page"] = current
+
+
 def route(page: str):
+    _cleanup_state_on_nav(page)
+
     if page == "accueil":          return render_accueil()
     if page == "groupe_dashboard": return render_groupe_dashboard()
     if page == "groupe_catalogue": return render_groupe_catalogue()

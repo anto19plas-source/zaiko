@@ -278,10 +278,16 @@ def get_ventes(restaurant_id, days=30):
 def get_kpis_groupe():
     conn = get_connection()
     nb_produits = conn.execute("SELECT COUNT(*) FROM produits WHERE actif=1").fetchone()[0]
+    # Alertes agrégées par (resto, produit) — somme tous lieux confondus
     nb_alertes = conn.execute("""
-        SELECT COUNT(*) FROM inventaire i
-        JOIN produits p ON i.produit_id = p.id
-        WHERE i.quantite <= p.seuil_alerte
+        SELECT COUNT(*) FROM (
+            SELECT i.restaurant_id, p.id
+            FROM inventaire i
+            JOIN produits p ON i.produit_id = p.id
+            WHERE p.actif = 1
+            GROUP BY i.restaurant_id, p.id
+            HAVING SUM(i.quantite) > 0 AND SUM(i.quantite) < p.seuil_alerte
+        )
     """).fetchone()[0]
     since_7j = (date.today() - timedelta(days=7)).isoformat()
     ca_semaine = conn.execute(
@@ -352,26 +358,6 @@ def get_ventes_groupe_30j():
 
 
 # ─── Write ───────────────────────────────────────────────────────────────────
-
-def upsert_inventaire(restaurant_id, produit_id, quantite, note=""):
-    conn = get_connection()
-    exists = conn.execute(
-        "SELECT id FROM inventaire WHERE restaurant_id=? AND produit_id=?",
-        (restaurant_id, produit_id)
-    ).fetchone()
-    if exists:
-        conn.execute(
-            "UPDATE inventaire SET quantite=?, date_saisie=?, note=? WHERE restaurant_id=? AND produit_id=?",
-            (quantite, date.today().isoformat(), note or None, restaurant_id, produit_id)
-        )
-    else:
-        conn.execute(
-            "INSERT INTO inventaire (restaurant_id, produit_id, quantite, date_saisie, note) VALUES (?,?,?,?,?)",
-            (restaurant_id, produit_id, quantite, date.today().isoformat(), note or None)
-        )
-    conn.commit()
-    conn.close()
-
 
 def add_mouvement(restaurant_id, produit_id, type_mouvement, quantite, note=""):
     conn = get_connection()
