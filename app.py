@@ -45,7 +45,7 @@ RESTO_NAV = [
     ("dashboard",   "Dashboard"),
     ("inventaire",  "Inventaire"),
     ("historique",  "Historique inventaire"),
-    ("ventes",      "Ventes & Ratios"),
+    ("performance", "Performance"),
     ("fiches",      "Fiches techniques"),
 ]
 
@@ -2695,37 +2695,147 @@ def render_resto_mouvements(resto: dict):
 #  RESTAURANT — VENTES & RATIOS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def render_resto_ventes(resto: dict):
+PERIODES_PERF = ["Semaine en cours", "Mois en cours", "Trimestre en cours", "Année en cours"]
+
+
+def _periode_dates(label: str, today: date | None = None):
+    """(debut, fin, debut_prev, fin_prev) en bornes incluses pour la période demandée."""
+    today = today or date.today()
+    if label == "Semaine en cours":
+        debut = today - timedelta(days=today.weekday())
+        fin = debut + timedelta(days=6)
+        debut_prev = debut - timedelta(days=7)
+        fin_prev = fin - timedelta(days=7)
+    elif label == "Trimestre en cours":
+        q = (today.month - 1) // 3
+        debut = date(today.year, q * 3 + 1, 1)
+        fin = (date(today.year, 12, 31) if q == 3
+               else date(today.year, (q + 1) * 3 + 1, 1) - timedelta(days=1))
+        if q == 0:
+            debut_prev = date(today.year - 1, 10, 1)
+            fin_prev = date(today.year - 1, 12, 31)
+        else:
+            debut_prev = date(today.year, (q - 1) * 3 + 1, 1)
+            fin_prev = debut - timedelta(days=1)
+    elif label == "Année en cours":
+        debut = date(today.year, 1, 1)
+        fin = date(today.year, 12, 31)
+        debut_prev = date(today.year - 1, 1, 1)
+        fin_prev = date(today.year - 1, 12, 31)
+    else:  # "Mois en cours" (défaut)
+        debut = today.replace(day=1)
+        fin = (date(debut.year, 12, 31) if debut.month == 12
+               else date(debut.year, debut.month + 1, 1) - timedelta(days=1))
+        if debut.month == 1:
+            debut_prev = date(debut.year - 1, 12, 1)
+            fin_prev = date(debut.year - 1, 12, 31)
+        else:
+            debut_prev = date(debut.year, debut.month - 1, 1)
+            fin_prev = debut - timedelta(days=1)
+    return debut, fin, debut_prev, fin_prev
+
+
+def render_resto_performance(resto: dict):
     rid    = resto["id"]
     accent = resto["accent"]
 
-    page_header(resto["nom"], "Ventes & Ratios",
-                "Chiffre d'affaires réel vs théorique sur 30 jours")
+    page_header(resto["nom"], "Performance",
+                "Chiffre d'affaires et ratio matière par période")
 
-    ventes = db.get_ventes(rid, days=30)
+    # ─── Sélecteur de période (partagé CA + Ratios) ───────────────────────────
+    periode = st.selectbox(
+        "Période",
+        PERIODES_PERF,
+        index=1,  # Mois en cours par défaut
+        key=f"perf_periode_{rid}",
+    )
+    debut, fin, debut_prev, fin_prev = _periode_dates(periode)
 
-    if ventes:
-        df = pd.DataFrame(ventes)
+    ventes_p  = db.get_ventes_periode(rid, debut, fin)
+    ventes_pp = db.get_ventes_periode(rid, debut_prev, fin_prev)
+
+    debut_ytd  = date(date.today().year, 1, 1)
+    ventes_ytd = db.get_ventes_periode(rid, debut_ytd, date.today())
+
+    libelle_periode = f"{debut.strftime('%d/%m/%Y')} → {fin.strftime('%d/%m/%Y')}"
+
+    # ─── Chiffre d'affaires ───────────────────────────────────────────────────
+    section("Chiffre d'affaires")
+
+    ca_p   = sum(v["montant_reel"] for v in ventes_p)
+    ca_pp  = sum(v["montant_reel"] for v in ventes_pp)
+    ca_ytd = sum(v["montant_reel"] for v in ventes_ytd)
+    delta_ca = ((ca_p - ca_pp) / ca_pp * 100) if ca_pp else 0
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        kpi(f"CA — {periode.lower()}", f"{ca_p:,.0f} €", libelle_periode)
+    with c2:
+        if ca_pp:
+            sign = "+" if delta_ca >= 0 else ""
+            kpi("Δ vs période précédente", f"{sign}{delta_ca:.1f}%",
+                f"vs {ca_pp:,.0f} €",
+                accent="success" if delta_ca >= 0 else "red")
+        else:
+            kpi("Δ vs période précédente", "—", "pas de données antérieures")
+    with c3:
+        kpi("CA cumulé année", f"{ca_ytd:,.0f} €",
+            f"depuis le 01/01/{debut_ytd.year}")
+
+    if ventes_p:
+        df = pd.DataFrame(ventes_p)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["date_vente"], y=df["montant_reel"],
+            name="CA réel",
+            line=dict(color=accent, width=2.5),
+            mode="lines+markers",
+            marker=dict(size=5, color=accent),
+            fill="tozeroy", fillcolor=f"{accent}1A",
+        ))
+        plotly_layout(fig, height=320)
+        st.plotly_chart(fig, use_container_width=True, key=f"chart_ca_{rid}")
+    else:
+        st.info("Aucune vente enregistrée sur cette période.")
+
+    # ─── Ratios ───────────────────────────────────────────────────────────────
+    section("Ratios")
+
+    if ventes_p:
+        df = pd.DataFrame(ventes_p)
         total_reel = df["montant_reel"].sum()
         total_theo = df["montant_theorique"].sum()
-        ratio      = (total_reel / total_theo * 100) if total_theo else 0
-        ecart      = total_reel - total_theo
+        ratio = (total_reel / total_theo * 100) if total_theo else 0
+        ecart = total_reel - total_theo
 
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: kpi("CA réel 30j", f"{total_reel:,.0f} €", "période complète")
-        with c2: kpi("CA théorique 30j", f"{total_theo:,.0f} €", "attendu fiches")
+        if ventes_pp:
+            df_pp   = pd.DataFrame(ventes_pp)
+            tr_pp   = df_pp["montant_reel"].sum()
+            tt_pp   = df_pp["montant_theorique"].sum()
+            ratio_pp = (tr_pp / tt_pp * 100) if tt_pp else 0
+            delta_ratio = ratio - ratio_pp
+        else:
+            ratio_pp = None
+            delta_ratio = None
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            kpi("Ratio matière", f"{ratio:.1f}%", "réel / théorique",
+                accent="success" if ratio >= 95 else ("gold" if ratio >= 85 else "red"))
+        with c2:
+            if delta_ratio is not None:
+                sign = "+" if delta_ratio >= 0 else ""
+                kpi("Δ vs période précédente", f"{sign}{delta_ratio:.1f} pts",
+                    f"vs {ratio_pp:.1f}%",
+                    accent="success" if delta_ratio >= 0 else "red")
+            else:
+                kpi("Δ vs période précédente", "—", "pas de données antérieures")
         with c3:
-            trend = f"{ratio - 100:+.1f}%"
-            kpi("Ratio", f"{ratio:.1f}%", "réel / théorique",
-                accent="success" if ratio >= 95 else ("gold" if ratio >= 85 else "red"),
-                trend=trend)
-        with c4:
             sign = "+" if ecart >= 0 else ""
             kpi("Écart cumulé", f"{sign}{ecart:,.0f} €",
-                "positif = sur-performance",
+                "réel − théorique",
                 accent="success" if ecart >= 0 else "red")
 
-        section("Courbe réel vs théorique")
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=df["date_vente"], y=df["montant_theorique"],
@@ -2739,12 +2849,10 @@ def render_resto_ventes(resto: dict):
             line=dict(color=accent, width=2.5),
             mode="lines+markers",
             marker=dict(size=5, color=accent),
-            fill="tonexty", fillcolor=f"{accent}1A",
         ))
-        plotly_layout(fig, height=360)
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_layout(fig, height=320)
+        st.plotly_chart(fig, use_container_width=True, key=f"chart_ratio_{rid}")
 
-        section("Détail par jour")
         df_d = df[["date_vente", "montant_reel", "montant_theorique"]].copy()
         df_d["Ratio"] = (df_d["montant_reel"] / df_d["montant_theorique"] * 100).round(1).astype(str) + "%"
         df_d["Écart (€)"] = (df_d["montant_reel"] - df_d["montant_theorique"]).round(2)
@@ -2752,8 +2860,9 @@ def render_resto_ventes(resto: dict):
         df_d = df_d.sort_values("Date", ascending=False).reset_index(drop=True)
         st.dataframe(df_d, use_container_width=True, hide_index=True)
     else:
-        st.info("Aucune vente enregistrée sur les 30 derniers jours.")
+        st.info("Aucune donnée de ratio sur cette période.")
 
+    # ─── Saisie ───────────────────────────────────────────────────────────────
     section("Saisir les ventes du jour")
 
     with st.form(f"form_ventes_{rid}", clear_on_submit=True):
@@ -3149,7 +3258,8 @@ def route(page: str):
             if sub == "inventaire": return render_resto_inventaire(r)
             if sub == "historique": return render_resto_historique(r)
             if sub == "mouvements": return render_resto_mouvements(r)
-            if sub == "ventes":     return render_resto_ventes(r)
+            if sub == "performance": return render_resto_performance(r)
+            if sub == "ventes":     return render_resto_performance(r)  # alias compat
             if sub == "fiches":     return render_resto_fiches(r)
 
     render_accueil()

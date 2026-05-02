@@ -6,10 +6,10 @@ from seed_data import CATEGORIES as SEED_CATEGORIES, PRODUITS as SEED_PRODUITS
 DB_PATH = "zaiko.db"
 
 RESTAURANTS_CONFIG = [
-    {"id": 1, "nom": "Chéri Chéri",         "type": "Bar à cocktails",     "accent": "#D89593", "key": "cheri_cheri"},
-    {"id": 2, "nom": "Chéri Guapito",        "type": "Restaurant mexicain", "accent": "#B23A2A", "key": "guapito"},
-    {"id": 3, "nom": "Chéri Guapo",          "type": "Restaurant argentin", "accent": "#7A2A22", "key": "guapo"},
-    {"id": 4, "nom": "Les Halles de la Cité","type": "Brasserie",           "accent": "#C9A24B", "key": "halles"},
+    {"id": 1, "nom": "Chéri Chéri",         "type": "Restaurant italien", "accent": "#D89593", "key": "cheri_cheri"},
+    {"id": 2, "nom": "Chéri Guapito",        "type": "Tapas espagnol",     "accent": "#B23A2A", "key": "guapito"},
+    {"id": 3, "nom": "Chéri Guapo",          "type": "Tapas espagnol",     "accent": "#7A2A22", "key": "guapo"},
+    {"id": 4, "nom": "Les Halles de la Cité","type": "Corner food",        "accent": "#C9A24B", "key": "halles"},
 ]
 
 
@@ -149,10 +149,10 @@ def init_db():
 
 def _seed(c):
     c.executemany("INSERT INTO restaurants VALUES (?,?,?,?,?)", [
-        (1, "Chéri Chéri",          "Bar à cocktails",     "#D89593", "Paris 11e"),
-        (2, "Chéri Guapito",         "Restaurant mexicain", "#B23A2A", "Paris 2e"),
-        (3, "Chéri Guapo",           "Restaurant argentin", "#7A2A22", "Paris 9e"),
-        (4, "Les Halles de la Cité", "Brasserie",           "#C9A24B", "Paris 1er"),
+        (1, "Chéri Chéri",          "Restaurant italien", "#D89593", "Paris 11e"),
+        (2, "Chéri Guapito",         "Tapas espagnol",     "#B23A2A", "Paris 2e"),
+        (3, "Chéri Guapo",           "Tapas espagnol",     "#7A2A22", "Paris 9e"),
+        (4, "Les Halles de la Cité", "Corner food",        "#C9A24B", "Paris 1er"),
     ])
 
     c.executemany("INSERT INTO categories (id, nom, emoji) VALUES (?,?,?)",
@@ -271,6 +271,22 @@ def get_ventes(restaurant_id, days=30):
         WHERE restaurant_id = ? AND date_vente >= ?
         ORDER BY date_vente ASC
     """, (restaurant_id, since)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_ventes_periode(restaurant_id, date_debut, date_fin):
+    """Ventes d'un resto entre deux dates incluses (objets date ou ISO strings)."""
+    d_iso = date_debut.isoformat() if hasattr(date_debut, "isoformat") else date_debut
+    f_iso = date_fin.isoformat()   if hasattr(date_fin,   "isoformat") else date_fin
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT * FROM ventes
+        WHERE restaurant_id = ?
+          AND date_vente >= ?
+          AND date_vente <= ?
+        ORDER BY date_vente ASC
+    """, (restaurant_id, d_iso, f_iso)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
