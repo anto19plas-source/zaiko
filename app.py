@@ -1,4 +1,3 @@
-import re
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -2298,25 +2297,43 @@ def render_resto_inventaire(resto: dict):
     # ── Clôture mensuelle ──
     section("Clôture mensuelle")
     today = date.today()
-    mois_default = today.strftime("%Y-%m")
+
+    # 12 derniers mois (courant + 11 précédents), ordre décroissant
+    mois_fr = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+               "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+    mois_options = []
+    y, m = today.year, today.month
+    for _ in range(12):
+        mois_options.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    mois_labels = {
+        m_iso: f"{mois_fr[int(m_iso[5:7]) - 1]} {m_iso[:4]}"
+        for m_iso in mois_options
+    }
 
     cc1, cc2, cc3 = st.columns([1, 2, 1])
     with cc1:
-        mois_input = st.text_input(
-            "Mois à clôturer (YYYY-MM)", value=mois_default,
+        mois_input = st.selectbox(
+            "Mois à clôturer",
+            options=mois_options,
+            format_func=lambda m: mois_labels[m],
+            index=0,
             key=f"cloture_mois_{rid}",
         )
     with cc2:
-        st.markdown(f'<div class="zk-help-line">Crée un snapshot figé du stock à ce jour pour le mois <b>{mois_input}</b>. Si un snapshot existe déjà pour ce mois, il sera <b>écrasé</b>.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="zk-help-line">Crée un snapshot figé du stock à ce jour pour le mois <b>{mois_labels[mois_input]}</b>. Si un snapshot existe déjà pour ce mois, il sera <b>écrasé</b>.</div>', unsafe_allow_html=True)
     with cc3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         if st.button("Clôturer le mois", key=f"btn_cloture_{rid}", use_container_width=True):
-            if re.match(r"^\d{4}-(0[1-9]|1[0-2])$", mois_input or ""):
+            try:
                 db.cloturer_inventaire_mois(rid, mois_input)
-                st.success(f"Inventaire {mois_input} clôturé. Visible dans l'historique.")
+                st.success(f"Inventaire {mois_labels[mois_input]} clôturé. Visible dans l'historique.")
                 st.rerun()
-            else:
-                st.error("Format attendu : YYYY-MM (exemple : 2026-05).")
+            except Exception as e:
+                st.error(f"Échec de la clôture : {e}")
 
 
 def render_fiche_stock(resto: dict, produit_id: int):
@@ -2519,6 +2536,25 @@ def render_snapshot_detail(resto: dict, snapshot_id: int):
             unsafe_allow_html=True,
         )
         return
+
+    df_export = pd.DataFrame([{
+        "Catégorie":   l["categorie_nom"] or "Sans catégorie",
+        "Référence":   l["produit_nom"],
+        "Format":      l["unite"],
+        "Bar":         l["qte_bar"],
+        "Réserve":     l["qte_reserve"],
+        "Total":       l["qte_total"],
+        "Prix figé (€)": l["prix_snapshot"],
+        "Valeur (€)":  l["valeur"],
+    } for l in lignes])
+    csv_bytes = df_export.to_csv(index=False, sep=";").encode("utf-8-sig")
+    st.download_button(
+        "Exporter en CSV",
+        data=csv_bytes,
+        file_name=f"inventaire_{resto['key']}_{snap['mois']}.csv",
+        mime="text/csv",
+        key=f"dl_snap_{snapshot_id}",
+    )
 
     # Groupement par catégorie
     par_cat = {}
@@ -2773,6 +2809,16 @@ def render_resto_performance(resto: dict):
         df_d.columns = ["Date", "CA réel (€)", "CA théorique (€)", "Ratio", "Écart (€)"]
         df_d = df_d.sort_values("Date", ascending=False).reset_index(drop=True)
         st.dataframe(df_d, use_container_width=True, hide_index=True)
+
+        slug = resto["key"]
+        csv_bytes = df_d.to_csv(index=False, sep=";").encode("utf-8-sig")
+        st.download_button(
+            "Exporter en CSV",
+            data=csv_bytes,
+            file_name=f"performance_{slug}_{debut.isoformat()}_{fin.isoformat()}.csv",
+            mime="text/csv",
+            key=f"dl_perf_{rid}",
+        )
     else:
         st.info("Aucune donnée de ratio sur cette période.")
 
