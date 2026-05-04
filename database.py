@@ -33,8 +33,7 @@ def init_db():
 
         CREATE TABLE IF NOT EXISTS categories (
             id    INTEGER PRIMARY KEY,
-            nom   TEXT NOT NULL,
-            emoji TEXT
+            nom   TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS produits (
@@ -56,16 +55,6 @@ def init_db():
             date_saisie     TEXT,
             note            TEXT,
             UNIQUE (restaurant_id, produit_id, lieu)
-        );
-
-        CREATE TABLE IF NOT EXISTS mouvements (
-            id              INTEGER PRIMARY KEY,
-            restaurant_id   INTEGER REFERENCES restaurants(id),
-            produit_id      INTEGER REFERENCES produits(id),
-            type_mouvement  TEXT,
-            quantite        REAL,
-            date_mouvement  TEXT,
-            note            TEXT
         );
 
         CREATE TABLE IF NOT EXISTS ventes (
@@ -155,8 +144,8 @@ def _seed(c):
         (4, "Les Halles de la Cité", "Corner food",        "#C9A24B", "Paris 1er"),
     ])
 
-    c.executemany("INSERT INTO categories (id, nom, emoji) VALUES (?,?,?)",
-                  [(cid, nom, "") for cid, nom in SEED_CATEGORIES])
+    c.executemany("INSERT INTO categories (id, nom) VALUES (?,?)",
+                  list(SEED_CATEGORIES))
 
     c.executemany(
         "INSERT INTO produits (id, nom, categorie_id, unite, prix_unitaire, seuil_alerte, actif) VALUES (?,?,?,?,?,0,1)",
@@ -198,7 +187,7 @@ def get_categories():
 def get_produits(categorie_id=None):
     conn = get_connection()
     q = """
-        SELECT p.*, c.nom AS categorie_nom, c.emoji AS categorie_emoji
+        SELECT p.*, c.nom AS categorie_nom
         FROM produits p
         LEFT JOIN categories c ON p.categorie_id = c.id
         WHERE p.actif = 1
@@ -217,7 +206,7 @@ def get_inventaire(restaurant_id):
     conn = get_connection()
     rows = conn.execute("""
         SELECT i.*, p.nom AS produit_nom, p.unite, p.seuil_alerte, p.prix_unitaire,
-               c.nom AS categorie_nom, c.emoji AS categorie_emoji
+               c.nom AS categorie_nom
         FROM inventaire i
         JOIN produits p ON i.produit_id = p.id
         LEFT JOIN categories c ON p.categorie_id = c.id
@@ -245,20 +234,6 @@ def get_alertes(restaurant_id):
         HAVING SUM(i.quantite) > 0 AND SUM(i.quantite) < p.seuil_alerte
         ORDER BY SUM(i.quantite) ASC
     """, (restaurant_id,)).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def get_mouvements(restaurant_id, limit=50):
-    conn = get_connection()
-    rows = conn.execute("""
-        SELECT m.*, p.nom AS produit_nom, p.unite
-        FROM mouvements m
-        JOIN produits p ON m.produit_id = p.id
-        WHERE m.restaurant_id = ?
-        ORDER BY m.date_mouvement DESC, m.id DESC
-        LIMIT ?
-    """, (restaurant_id, limit)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -374,16 +349,6 @@ def get_ventes_groupe_30j():
 
 
 # ─── Write ───────────────────────────────────────────────────────────────────
-
-def add_mouvement(restaurant_id, produit_id, type_mouvement, quantite, note=""):
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO mouvements (restaurant_id, produit_id, type_mouvement, quantite, date_mouvement, note) VALUES (?,?,?,?,?,?)",
-        (restaurant_id, produit_id, type_mouvement, quantite, date.today().isoformat(), note or None)
-    )
-    conn.commit()
-    conn.close()
-
 
 def add_vente(restaurant_id, date_vente, montant_reel, montant_theorique, note=""):
     conn = get_connection()

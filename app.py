@@ -49,13 +49,6 @@ RESTO_NAV = [
     ("fiches",      "Fiches techniques"),
 ]
 
-TYPE_MV_COLORS = {
-    "entrée":    SUCCESS,
-    "sortie":    NAVY,
-    "perte":     RED,
-    "transfert": GOLD,
-}
-
 FORMATS_PREDEFINIS = [
     "bouteille",
     # Centilitres — mesures bar et petits formats
@@ -2047,28 +2040,6 @@ def _render_fiche_prix(produit_id: int):
 #  GROUPE WAC — FICHES TECHNIQUES
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def render_groupe_fiches():
-    page_header("Groupe WAC", "Fiches techniques",
-                "Recettes, grammages et coûts théoriques")
-    st.markdown(f'''
-    <div style="background:white;border:1px solid {RULE};border-radius:12px;
-                padding:64px 40px;text-align:center;margin-top:8px;">
-        <div style="font-family:var(--zk-font-mono);font-size:11px;font-weight:500;
-                    letter-spacing:0.28em;text-transform:uppercase;color:{MUTED};
-                    margin-bottom:16px;">Module en préparation</div>
-        <div style="font-family:var(--zk-font-sans);font-size:24px;font-weight:700;
-                    letter-spacing:-0.02em;color:{INK};margin-bottom:12px;">
-            Disponible prochainement
-        </div>
-        <div style="font-size:14px;color:{MUTED};max-width:440px;margin:0 auto;
-                    line-height:1.55;">
-            Fiches techniques avec grammages, coûts matière et ratios théoriques —
-            intégration dans la prochaine version.
-        </div>
-    </div>
-    ''', unsafe_allow_html=True)
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  RESTAURANT — HEADER BANNER
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2635,64 +2606,7 @@ def render_snapshot_produit_detail(resto: dict, snapshot_id: int, produit_id: in
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  RESTAURANT — MOUVEMENTS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def render_resto_mouvements(resto: dict):
-    rid = resto["id"]
-
-    page_header(resto["nom"], "Mouvements de stock",
-                "Historique des entrées, sorties, pertes et transferts")
-
-    section("Saisir un mouvement")
-
-    produits  = db.get_produits()
-    prod_opts = {f"{p['nom']} ({p['unite']})": p["id"] for p in produits}
-    types_mv  = ["entrée", "sortie", "perte", "transfert"]
-
-    with st.form(f"form_mv_{rid}", clear_on_submit=True):
-        c1, c2, c3 = st.columns([2, 1, 1])
-        with c1: prod_label = st.selectbox("Produit", list(prod_opts.keys()))
-        with c2: type_mv = st.selectbox("Type", types_mv)
-        with c3: qty = st.number_input("Quantité", min_value=0.1, step=0.5, format="%.1f")
-        note = st.text_input("Note (optionnel)")
-        if st.form_submit_button("Enregistrer le mouvement"):
-            db.add_mouvement(rid, prod_opts[prod_label], type_mv, qty, note)
-            st.success("Mouvement enregistré.")
-            st.rerun()
-
-    section("50 derniers mouvements")
-
-    mvts = db.get_mouvements(rid, limit=50)
-    if mvts:
-        df = pd.DataFrame([{
-            "Date":     m["date_mouvement"],
-            "Produit":  m["produit_nom"],
-            "Type":     m["type_mouvement"],
-            "Quantité": f"{m['quantite']} {m['unite']}",
-            "Note":     m["note"] or "—",
-        } for m in mvts])
-        st.dataframe(df, use_container_width=True, hide_index=True)
-
-        section("Répartition par type")
-        type_counts = df["Type"].value_counts().reset_index()
-        type_counts.columns = ["Type", "Nombre"]
-        color_map = {t: TYPE_MV_COLORS.get(t, NAVY) for t in type_counts["Type"]}
-        fig = px.bar(
-            type_counts, x="Type", y="Nombre",
-            color="Type", color_discrete_map=color_map,
-            labels={"Type": "", "Nombre": ""},
-        )
-        fig.update_traces(marker_line_width=0)
-        fig.update_layout(showlegend=False)
-        plotly_layout(fig, height=260)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Aucun mouvement enregistré.")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  RESTAURANT — VENTES & RATIOS
+#  RESTAURANT — PERFORMANCE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 PERIODES_PERF = ["Semaine en cours", "Mois en cours", "Trimestre en cours", "Année en cours"]
@@ -3248,7 +3162,6 @@ def route(page: str):
     if page == "groupe_dashboard": return render_groupe_dashboard()
     if page == "groupe_catalogue": return render_groupe_catalogue()
     if page == "groupe_prix":      return render_groupe_prix()
-    if page == "groupe_fiches":    return render_groupe_fiches()
 
     for r in RESTAURANTS:
         key = r["key"]
@@ -3257,7 +3170,6 @@ def route(page: str):
             if sub == "dashboard":  return render_resto_dashboard(r)
             if sub == "inventaire": return render_resto_inventaire(r)
             if sub == "historique": return render_resto_historique(r)
-            if sub == "mouvements": return render_resto_mouvements(r)
             if sub == "performance": return render_resto_performance(r)
             if sub == "ventes":     return render_resto_performance(r)  # alias compat
             if sub == "fiches":     return render_resto_fiches(r)
