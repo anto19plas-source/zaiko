@@ -2786,12 +2786,15 @@ def render_resto_performance(resto: dict):
         with c3: theo = st.number_input("CA théorique (€)", min_value=0.0, step=10.0, format="%.2f")
         note = st.text_input("Note (optionnel)")
         if st.form_submit_button("Enregistrer"):
-            if reel > 0:
-                db.add_vente(rid, date_v, reel, theo, note)
-                st.success("Ventes enregistrées.")
-                st.rerun()
-            else:
+            if reel <= 0:
                 st.error("Le CA réel doit être supérieur à 0.")
+            else:
+                try:
+                    db.add_vente(rid, date_v, reel, theo, note)
+                    st.success("Ventes enregistrées.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

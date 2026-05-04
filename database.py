@@ -285,8 +285,11 @@ def get_kpis_groupe():
         "SELECT COALESCE(SUM(montant_reel),0) FROM ventes WHERE date_vente >= ?",
         (since_7j,)
     ).fetchone()[0]
+    since_30j = (date.today() - timedelta(days=30)).isoformat()
     ratio_row = conn.execute(
-        "SELECT AVG(CAST(montant_reel AS REAL)/montant_theorique) FROM ventes WHERE montant_theorique > 0"
+        "SELECT AVG(CAST(montant_reel AS REAL)/montant_theorique) FROM ventes "
+        "WHERE montant_theorique > 0 AND date_vente >= ?",
+        (since_30j,)
     ).fetchone()[0]
     conn.close()
     return {
@@ -318,9 +321,11 @@ def get_kpis_resto(restaurant_id):
         "SELECT COALESCE(SUM(montant_reel),0) FROM ventes WHERE restaurant_id=? AND date_vente>=?",
         (restaurant_id, since_7j)
     ).fetchone()[0]
+    since_30j = (date.today() - timedelta(days=30)).isoformat()
     ratio_row = conn.execute(
-        "SELECT AVG(CAST(montant_reel AS REAL)/montant_theorique) FROM ventes WHERE restaurant_id=? AND montant_theorique>0",
-        (restaurant_id,)
+        "SELECT AVG(CAST(montant_reel AS REAL)/montant_theorique) FROM ventes "
+        "WHERE restaurant_id=? AND montant_theorique>0 AND date_vente>=?",
+        (restaurant_id, since_30j)
     ).fetchone()[0]
     conn.close()
     return {
@@ -351,10 +356,16 @@ def get_ventes_groupe_30j():
 # ─── Write ───────────────────────────────────────────────────────────────────
 
 def add_vente(restaurant_id, date_vente, montant_reel, montant_theorique, note=""):
+    reel = float(montant_reel or 0)
+    theo = float(montant_theorique or 0)
+    if reel < 0 or theo < 0:
+        raise ValueError("Les montants ne peuvent pas être négatifs.")
+    if reel > 1_000_000 or theo > 1_000_000:
+        raise ValueError("Montant aberrant (> 1 000 000 €).")
     conn = get_connection()
     conn.execute(
         "INSERT INTO ventes (restaurant_id, date_vente, montant_reel, montant_theorique, note) VALUES (?,?,?,?,?)",
-        (restaurant_id, str(date_vente), montant_reel, montant_theorique, note or None)
+        (restaurant_id, str(date_vente), reel, theo, note or None)
     )
     conn.commit()
     conn.close()
@@ -650,54 +661,60 @@ def cloturer_inventaire_mois(restaurant_id, mois):
     """
     Crée (ou écrase) un snapshot mensuel pour (resto, mois). 'mois' au format 'YYYY-MM'.
     Snapshot = copie de toutes les lignes inventaire courant avec prix unitaire figé.
-    Retourne l'id du snapshot.
+    Retourne l'id du snapshot. Tout se fait dans une transaction unique :
+    en cas d'échec, l'ancien snapshot est préservé.
     """
     conn = get_connection()
     today = date.today().isoformat()
+    try:
+        conn.execute("BEGIN")
 
-    # Supprimer un snapshot existant pour ce mois (écrasement)
-    existing = conn.execute(
-        "SELECT id FROM inventaires_mensuels WHERE restaurant_id=? AND mois=?",
-        (restaurant_id, mois)
-    ).fetchone()
-    if existing:
-        conn.execute("DELETE FROM inventaire_mensuel_lignes WHERE inventaire_mensuel_id=?", (existing["id"],))
-        conn.execute("DELETE FROM inventaires_mensuels WHERE id=?", (existing["id"],))
+        # Supprimer un snapshot existant pour ce mois (écrasement)
+        existing = conn.execute(
+            "SELECT id FROM inventaires_mensuels WHERE restaurant_id=? AND mois=?",
+            (restaurant_id, mois)
+        ).fetchone()
+        if existing:
+            conn.execute("DELETE FROM inventaire_mensuel_lignes WHERE inventaire_mensuel_id=?", (existing["id"],))
+            conn.execute("DELETE FROM inventaires_mensuels WHERE id=?", (existing["id"],))
 
-    # Snapshot des lignes courantes (uniquement celles avec quantité > 0)
-    lignes = conn.execute("""
-        SELECT i.produit_id, i.lieu, i.quantite, p.prix_unitaire
-        FROM inventaire i
-        JOIN produits p ON p.id = i.produit_id
-        WHERE i.restaurant_id = ? AND p.actif = 1 AND i.quantite > 0
-    """, (restaurant_id,)).fetchall()
+        # Snapshot des lignes courantes (uniquement celles avec quantité > 0)
+        lignes = conn.execute("""
+            SELECT i.produit_id, i.lieu, i.quantite, p.prix_unitaire
+            FROM inventaire i
+            JOIN produits p ON p.id = i.produit_id
+            WHERE i.restaurant_id = ? AND p.actif = 1 AND i.quantite > 0
+        """, (restaurant_id,)).fetchall()
 
-    # Calcul valeur totale et nb refs distinctes
-    valeur_totale = 0.0
-    refs_set = set()
-    for l in lignes:
-        valeur_totale += float(l["quantite"] or 0) * float(l["prix_unitaire"] or 0)
-        refs_set.add(l["produit_id"])
+        valeur_totale = 0.0
+        refs_set = set()
+        for l in lignes:
+            valeur_totale += float(l["quantite"] or 0) * float(l["prix_unitaire"] or 0)
+            refs_set.add(l["produit_id"])
 
-    cur = conn.execute(
-        """INSERT INTO inventaires_mensuels (restaurant_id, mois, date_cloture, valeur_totale, nb_refs, notes)
-           VALUES (?,?,?,?,?,'')""",
-        (restaurant_id, mois, today, valeur_totale, len(refs_set))
-    )
-    snapshot_id = cur.lastrowid
-
-    for l in lignes:
-        conn.execute(
-            """INSERT INTO inventaire_mensuel_lignes
-               (inventaire_mensuel_id, produit_id, lieu, quantite, prix_snapshot)
-               VALUES (?,?,?,?,?)""",
-            (snapshot_id, l["produit_id"], l["lieu"] or "reserve",
-             float(l["quantite"] or 0), float(l["prix_unitaire"] or 0))
+        cur = conn.execute(
+            """INSERT INTO inventaires_mensuels (restaurant_id, mois, date_cloture, valeur_totale, nb_refs, notes)
+               VALUES (?,?,?,?,?,'')""",
+            (restaurant_id, mois, today, valeur_totale, len(refs_set))
         )
+        snapshot_id = cur.lastrowid
 
-    conn.commit()
-    conn.close()
-    return snapshot_id
+        for l in lignes:
+            conn.execute(
+                """INSERT INTO inventaire_mensuel_lignes
+                   (inventaire_mensuel_id, produit_id, lieu, quantite, prix_snapshot)
+                   VALUES (?,?,?,?,?)""",
+                (snapshot_id, l["produit_id"], l["lieu"] or "reserve",
+                 float(l["quantite"] or 0), float(l["prix_unitaire"] or 0))
+            )
+
+        conn.commit()
+        return snapshot_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_inventaires_mensuels(restaurant_id):
